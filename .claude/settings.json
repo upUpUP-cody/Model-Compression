@@ -5,7 +5,18 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(touch src/models/__init__.py src/pruning/__init__.py src/recovery/__init__.py src/controller/__init__.py src/evaluation/__init__.py src/utils/__init__.py)",
-      "Bash(python check_structure.py)"
+      "Bash(python check_structure.py)",
+      "Bash(pip --version)",
+      "Bash(pip install *)",
+      "Bash(powershell -Command \"Get-Content 'C:\\\\Users\\\\honor\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Compression-Model-Compression\\\\8cc97c47-6880-496e-bb4a-b1480ecf90a2\\\\tasks\\\\b2msm9830.output' | Select-Object -Last 30\")",
+      "Bash(powershell -Command \"Get-Content 'C:\\\\Users\\\\honor\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Compression-Model-Compression\\\\8cc97c47-6880-496e-bb4a-b1480ecf90a2\\\\tasks\\\\b2msm9830.output' | Select-Object -Last 10\")",
+      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\honor\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Compression-Model-Compression\\\\8cc97c47-6880-496e-bb4a-b1480ecf90a2\\\\tasks\\\\b2msm9830.output' | Measure-Object -Line\\).Lines\")",
+      "Bash(powershell -Command \"Get-Content 'C:\\\\Users\\\\honor\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Compression-Model-Compression\\\\8cc97c47-6880-496e-bb4a-b1480ecf90a2\\\\tasks\\\\b2msm9830.output' | Select-Object -Last 5\")",
+      "Bash(powershell -Command \"\\(Get-Content 'C:\\\\Users\\\\honor\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Compression-Model-Compression\\\\8cc97c47-6880-496e-bb4a-b1480ecf90a2\\\\tasks\\\\b2msm9830.output' | Select-Object -Last 20\\)\")",
+      "Bash(python check_environment.py)",
+      "Bash(python test_imports.py)",
+      "Bash(python check_gpu.py)",
+      "Bash(git commit -m 'Add environment verification scripts and complete dependency installation *)"
     ],
     "additionalDirectories": [
       "D:\\Compression\\Model-Compression\\src\\models"
