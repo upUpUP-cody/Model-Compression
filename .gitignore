@@ -175,6 +175,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Project-specific
+*.pdf
+
 # pytype static type analyzer
 .pytype/
 
