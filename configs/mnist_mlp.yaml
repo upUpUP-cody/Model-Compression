@@ -1,0 +1,83 @@
+# Example configuration for MNIST + MLP experiment
+
+model:
+  type: "mlp"
+  input_dim: 784  # 28x28 MNIST images
+  hidden_dims: [512, 256, 128]
+  output_dim: 10
+  activation: "relu"
+  dropout: 0.2
+
+dataset:
+  name: "mnist"
+  data_dir: "./data/mnist"
+  batch_size: 64
+  num_workers: 4
+  normalize: true
+
+pruning:
+  method: "wanda"  # Options: magnitude, gradient, wanda, sparsegpt
+  target_sparsity: 0.9
+  structured: true  # Structured vs unstructured pruning
+  granularity: "neuron"  # neuron, channel, layer
+  skip_first_last: true  # Skip input/output layers
+
+recovery:
+  level: 2  # 0: none, 1: reconstruct, 2: lora, 3: distillation
+  epochs: 10
+  learning_rate: 0.001
+  warmup_steps: 100
+
+  # LoRA specific (level 2)
+  lora_rank: 8
+  lora_alpha: 16
+  lora_dropout: 0.1
+
+  # Distillation specific (level 3)
+  temperature: 2.0
+  alpha: 0.5  # Weight for soft loss
+
+controller:
+  type: "heuristic"  # Options: heuristic, adaptive, llm
+  capability_threshold: 0.05  # Accept if gap < 5%
+  max_failures: 3  # Rollback after 3 consecutive failures
+  min_quality_score: 0.6  # Minimum candidate quality
+
+frontier:
+  track_pareto: true
+  save_history: true
+  metrics: ["accuracy", "sparsity", "latency", "memory"]
+
+search:
+  max_iterations: 10
+  candidates_per_round: 5
+  cheap_eval_samples: 500  # Quick evaluation sample size
+  search_budget_hours: 12
+  early_stopping_patience: 3
+
+training:
+  epochs: 20
+  learning_rate: 0.001
+  optimizer: "adam"
+  scheduler: "cosine"
+  weight_decay: 0.0001
+  gradient_clip: 1.0
+
+evaluation:
+  metrics: ["accuracy", "f1", "precision", "recall"]
+  save_best: true
+  validate_every: 1  # Validate every N epochs
+
+logging:
+  use_wandb: true
+  wandb_project: "autonomous-lottery-ticket"
+  wandb_entity: null
+  log_every: 100  # Log every N steps
+  save_checkpoints: true
+
+hardware:
+  device: "cuda"  # cuda, cpu, mps
+  mixed_precision: true
+  compile: false  # PyTorch 2.0 compile
+
+seed: 42

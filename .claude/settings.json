@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(touch src/models/__init__.py src/pruning/__init__.py src/recovery/__init__.py src/controller/__init__.py src/evaluation/__init__.py src/utils/__init__.py)",
+      "Bash(python check_structure.py)"
+    ],
+    "additionalDirectories": [
+      "D:\\Compression\\Model-Compression\\src\\models"
+    ]
+  }
+}
