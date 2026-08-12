@@ -126,6 +126,86 @@ python scripts/download_datasets.py --dataset squad
 
 ---
 
+## 🤖 Claude Code GPU 任务提醒机制
+
+### 任务分类与提醒规则
+
+Claude Code 会在执行任务前自动识别硬件需求并给出提醒：
+
+#### ✅ **自动继续（本地 CPU）**
+不会给出提醒，直接在本地执行：
+- MNIST 相关的所有开发和训练
+- 所有算法实现（剪枝、LoRA、知识蒸馏逻辑）
+- 单元测试和集成测试
+- 代码重构、文档编写
+- 小规模数据处理和验证
+
+#### ⚠️ **给出建议（建议 GPU）**
+会提示但允许本地继续：
+- CIFAR-10 训练（CPU 慢 5-10 倍）
+- 中等规模模型训练
+- 提示示例: 
+  > ⚠️ 此任务建议使用 GPU (预计 CPU 需 2 小时，GPU 仅需 15 分钟)
+  > 
+  > 选项：
+  > 1. 继续本地 CPU 训练（会较慢）
+  > 2. 切换到云服务器执行
+
+#### 🔥 **必须停止（必须 GPU）**
+强制要求切换到服务器：
+- SQuAD + Qwen-0.5B 训练
+- 论文实验复现（步骤 F.3-F.5）
+- 大模型相关任务
+- 提示示例:
+  > 🔥 此任务必须使用 GPU (CPU 不可行，预计需要数天且可能内存溢出)
+  > 
+  > 需要执行的操作：
+  > 1. 提交当前本地代码到 Git
+  > 2. 连接到云服务器
+  > 3. 在服务器上执行: `git pull && python experiments/train_squad.py`
+
+### 任务清单标注
+
+所有任务已在 PROJECT_PLAN.md 中标注硬件需求：
+
+```
+✅ [CPU 可运行]    - 本地直接执行
+⚠️ [建议 GPU]     - 给出提醒，允许本地继续
+🔥 [必须 GPU]     - 强制要求切换服务器
+```
+
+### 云服务器切换流程
+
+当遇到 🔥 任务时，Claude Code 会引导你完成以下步骤：
+
+```bash
+# 1. 本地提交代码
+git add .
+git commit -m "准备云端实验"
+git push
+
+# 2. 连接云服务器
+ssh root@<IP> -p <PORT>
+
+# 3. 同步代码
+cd Model-Compression
+git pull
+
+# 4. 执行任务
+python experiments/train_squad.py --config configs/squad_config.yaml
+
+# 5. 推送结果
+git add results/
+git commit -m "Add experiment results"
+git push
+
+# 6. 本地拉取
+exit  # 退出服务器
+git pull
+```
+
+---
+
 ## 🛠️ Claude Code 使用说明
 
 ### 在本地
