@@ -178,6 +178,10 @@ dmypy.json
 # Project-specific
 *.pdf
 
+# Data directories
+data/
+!data/.gitkeep
+
 # pytype static type analyzer
 .pytype/
 
