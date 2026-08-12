@@ -1,509 +1,371 @@
 """
-结构化剪枝实现
-支持对 MLP 层、卷积层、注意力头进行结构化剪枝
+Structured pruning utilities for MLP-style models.
 """
+import copy
+import math
+from numbers import Integral, Real
+from typing import Dict, List, Optional, Sequence
+
 import torch
 import torch.nn as nn
-from typing import Dict, List, Tuple, Optional
-import copy
 
 
 class StructuredPruning:
-    """
-    结构化剪枝器
-    支持神经元级别、通道级别、注意力头级别的剪枝
+    """Physically prune hidden Linear layers and their connected modules.
+
+    Shape-changing pruning replaces affected modules. Create an optimizer only
+    after pruning, because optimizers retain references to the old parameters.
     """
 
     def __init__(self, model: nn.Module):
-        """
-        Args:
-            model: 待剪枝的模型
-        """
         self.model = model
-        self.pruning_masks = {}
+        self.pruning_masks: Dict[str, Dict] = {}
 
-    def prune_mlp_neurons(
-        self,
-        layer_name: str,
-        neuron_indices: List[int]
-    ) -> None:
-        """
-        剪枝 MLP 层的指定神经元
-
-        Args:
-            layer_name: 层名称 (如 'features.0' 表示第一个线性层)
-            neuron_indices: 要保留的神经元索引列表
-        """
-        # 获取目标层
-        layer = self._get_layer_by_name(layer_name)
-
-        if not isinstance(layer, nn.Linear):
-            raise ValueError(f"Layer {layer_name} is not a Linear layer")
-
-        # 剪枝权重和偏置
-        with torch.no_grad():
-            # 输出维度剪枝
-            layer.weight.data = layer.weight.data[neuron_indices, :]
-            if layer.bias is not None:
-                layer.bias.data = layer.bias.data[neuron_indices]
-
-            # 更新层的输出维度
-            layer.out_features = len(neuron_indices)
-
-        # 记录剪枝掩码
-        self.pruning_masks[layer_name] = {
-            'type': 'neuron',
-            'indices': neuron_indices,
-            'original_size': layer.weight.shape[0]
-        }
+    def prune_mlp_neurons(self, layer_name: str, neuron_indices: List[int]) -> None:
+        """Prune a hidden Linear layer while preserving connected dimensions."""
+        self.prune_linear_block(layer_name, neuron_indices)
 
     def prune_mlp_by_ratio(
         self,
         layer_name: str,
         prune_ratio: float,
-        importance_scores: Optional[torch.Tensor] = None
+        importance_scores: Optional[torch.Tensor] = None,
     ) -> List[int]:
-        """
-        按比例剪枝 MLP 层
+        """Return deterministic keep indices for a valid hidden Linear layer."""
+        layer = self._validate_hidden_linear(layer_name)
+        self._validate_prune_ratio(prune_ratio)
 
-        Args:
-            layer_name: 层名称
-            prune_ratio: 剪枝比例 (0.0-1.0)
-            importance_scores: 神经元重要性分数 (如果为None则使用权重L2范数)
-
-        Returns:
-            保留的神经元索引列表
-        """
-        layer = self._get_layer_by_name(layer_name)
-
-        if not isinstance(layer, nn.Linear):
-            raise ValueError(f"Layer {layer_name} is not a Linear layer")
-
-        num_neurons = layer.out_features
-        num_keep = int(num_neurons * (1 - prune_ratio))
-
-        # 计算重要性分数
         if importance_scores is None:
-            # 使用权重L2范数作为重要性
-            importance_scores = torch.norm(layer.weight.data, p=2, dim=1)
+            importance_scores = torch.norm(layer.weight.detach(), p=2, dim=1)
+        scores = self._validate_importance_scores(layer, importance_scores)
 
-        # 选择保留的神经元
-        _, sorted_indices = torch.sort(importance_scores, descending=True)
-        keep_indices = sorted(sorted_indices[:num_keep].tolist())
+        num_keep = int(layer.out_features * (1 - prune_ratio))
+        if num_keep == layer.out_features:
+            return list(range(layer.out_features))
 
-        return keep_indices
+        indexed_scores = [(-float(scores[index]), index) for index in range(layer.out_features)]
+        indexed_scores.sort()
+        return sorted(index for _, index in indexed_scores[:num_keep])
 
     def prune_linear_block(
         self,
         linear_layer_name: str,
         keep_indices: List[int],
-        next_linear_layer_name: Optional[str] = None
+        next_linear_layer_name: Optional[str] = None,
     ) -> None:
+        """Prune a hidden Linear layer, its following BatchNorm, and next Linear.
+
+        If ``next_linear_layer_name`` is supplied for compatibility, it must
+        match the actual downstream Linear layer.
         """
-        剪枝线性层及其相关的 BatchNorm、Dropout 层
+        linear_layer = self._validate_hidden_linear(linear_layer_name)
+        normalized_indices = self._validate_keep_indices(linear_layer, keep_indices)
+        discovered_next_name = self._find_next_layer(linear_layer_name)
+        if discovered_next_name is None:
+            raise ValueError(f"Layer {linear_layer_name} has no downstream Linear layer")
+        if (
+            next_linear_layer_name is not None
+            and next_linear_layer_name != discovered_next_name
+        ):
+            raise ValueError(
+                f"Expected downstream layer {discovered_next_name}, got {next_linear_layer_name}"
+            )
 
-        Args:
-            linear_layer_name: 线性层名称 (如 'features.0')
-            keep_indices: 保留的神经元索引
-            next_linear_layer_name: 下一个线性层名称 (用于调整输入维度)
-        """
-        # 剪枝当前线性层的输出
-        linear_layer = self._get_layer_by_name(linear_layer_name)
-        if isinstance(linear_layer, nn.Linear):
-            with torch.no_grad():
-                linear_layer.weight.data = linear_layer.weight.data[keep_indices, :]
-                if linear_layer.bias is not None:
-                    linear_layer.bias.data = linear_layer.bias.data[keep_indices]
-                linear_layer.out_features = len(keep_indices)
+        next_linear = self._get_layer_by_name(discovered_next_name)
+        if not isinstance(next_linear, nn.Linear):
+            raise ValueError(f"Layer {discovered_next_name} is not a Linear layer")
 
-        # 剪枝后续的 BatchNorm 层
-        # 假设结构是 Linear(N) -> BatchNorm(N+1) -> ReLU(N+2) -> Dropout(N+3)
-        parts = linear_layer_name.split('.')
-        if len(parts) == 2 and parts[0] == 'features':
-            linear_idx = int(parts[1])
-            bn_idx = linear_idx + 1
+        batch_norm_name = self._find_following_batch_norm(linear_layer_name)
+        batch_norm = (
+            self._get_layer_by_name(batch_norm_name)
+            if batch_norm_name is not None
+            else None
+        )
+        if batch_norm is not None and not isinstance(batch_norm, nn.BatchNorm1d):
+            raise ValueError(f"Layer {batch_norm_name} is not a BatchNorm1d layer")
 
-            try:
-                bn_layer = self._get_layer_by_name(f'features.{bn_idx}')
-                if isinstance(bn_layer, nn.BatchNorm1d):
-                    with torch.no_grad():
-                        bn_layer.weight.data = bn_layer.weight.data[keep_indices]
-                        bn_layer.bias.data = bn_layer.bias.data[keep_indices]
-                        bn_layer.running_mean = bn_layer.running_mean[keep_indices]
-                        bn_layer.running_var = bn_layer.running_var[keep_indices]
-                        bn_layer.num_features = len(keep_indices)
-            except:
-                pass  # 没有 BatchNorm 层
+        index_tensor = torch.tensor(
+            normalized_indices, device=linear_layer.weight.device, dtype=torch.long
+        )
+        pruned_linear = self._make_pruned_linear_output(linear_layer, index_tensor)
+        pruned_next = self._make_pruned_linear_input(next_linear, index_tensor)
+        pruned_batch_norm = (
+            self._make_pruned_batch_norm(batch_norm, index_tensor)
+            if batch_norm is not None
+            else None
+        )
 
-        # 剪枝下一个线性层的输入
-        if next_linear_layer_name:
-            next_layer = self._get_layer_by_name(next_linear_layer_name)
-            if isinstance(next_layer, nn.Linear):
-                with torch.no_grad():
-                    next_layer.weight.data = next_layer.weight.data[:, keep_indices]
-                    next_layer.in_features = len(keep_indices)
+        self._replace_layer(linear_layer_name, pruned_linear)
+        if pruned_batch_norm is not None and batch_norm_name is not None:
+            self._replace_layer(batch_norm_name, pruned_batch_norm)
+        self._replace_layer(discovered_next_name, pruned_next)
+
+        self.pruning_masks[linear_layer_name] = {
+            "type": "neuron",
+            "indices": normalized_indices,
+            "original_size": linear_layer.out_features,
+            "retained_size": len(normalized_indices),
+        }
 
     def prune_connected_layers(
-        self,
-        current_layer: str,
-        next_layer: str,
-        keep_indices: List[int]
+        self, current_layer: str, next_layer: str, keep_indices: List[int]
     ) -> None:
-        """
-        剪枝两个连接的层（为了向后兼容保留此方法）
-
-        Args:
-            current_layer: 当前层名称
-            next_layer: 下一层名称
-            keep_indices: 保留的神经元索引
-        """
+        """Backward-compatible alias for connected hidden-layer pruning."""
         self.prune_linear_block(current_layer, keep_indices, next_layer)
 
     def prune_uniform(self, prune_ratio: float) -> int:
-        """
-        对所有隐藏层应用统一的剪枝比例
-
-        注意：这个方法会原地修改模型
-
-        Args:
-            prune_ratio: 剪枝比例 (0.0-1.0)
-
-        Returns:
-            剪枝后的总参数量
-        """
-        # 找到所有线性层（按定义顺序）
-        linear_layers = []
-        for name, module in self.model.named_modules():
-            if isinstance(module, nn.Linear):
-                linear_layers.append(name)
-
-        if len(linear_layers) < 2:
-            # 只有一个线性层（可能只是分类器），不剪枝
-            return sum(p.numel() for p in self.model.parameters())
-
-        # 从第一个隐藏层开始，到倒数第二个（不剪枝分类层）
-        # 从后往前处理，避免影响前面层的索引计算
-        for i in range(len(linear_layers) - 2, -1, -1):
-            layer_name = linear_layers[i]
-            next_layer_name = linear_layers[i + 1]
-
-            # 计算保留的神经元索引
-            layer = self._get_layer_by_name(layer_name)
-            if not isinstance(layer, nn.Linear):
-                continue
-
-            num_neurons = layer.out_features
-            num_keep = int(num_neurons * (1 - prune_ratio))
-
-            if num_keep <= 0:
-                num_keep = 1  # 至少保留一个神经元
-
-            # 使用权重L2范数作为重要性
-            importance_scores = torch.norm(layer.weight.data, p=2, dim=1)
-            _, sorted_indices = torch.sort(importance_scores, descending=True)
-            keep_indices = sorted(sorted_indices[:num_keep].tolist())
-
-            # 应用剪枝（这会修改当前层的输出和下一层的输入）
-            self.prune_linear_block(layer_name, keep_indices, next_layer_name)
-
-        # 返回剪枝后的参数量
-        return sum(p.numel() for p in self.model.parameters())
+        """Apply one pruning ratio to every hidden Linear layer in reverse order."""
+        self._validate_prune_ratio(prune_ratio)
+        hidden_layers = self._hidden_linear_layer_names()
+        for layer_name in reversed(hidden_layers):
+            keep_indices = self.prune_mlp_by_ratio(layer_name, prune_ratio)
+            self.prune_linear_block(layer_name, keep_indices)
+        return self.get_structural_parameter_count()
 
     def prune_by_layer(self, layer_ratios: Dict[str, float]) -> int:
-        """
-        按照指定的每层剪枝比例进行剪枝
+        """Apply configured ratios to hidden Linear layers without partial validation."""
+        if not isinstance(layer_ratios, dict):
+            raise ValueError("layer_ratios must be a dictionary")
 
-        注意：这个方法会原地修改模型
+        for layer_name, prune_ratio in layer_ratios.items():
+            self._validate_hidden_linear(layer_name)
+            self._validate_prune_ratio(prune_ratio)
 
-        Args:
-            layer_ratios: 每层的剪枝比例字典 {layer_name: prune_ratio}
+        ordered_layers = [
+            layer_name
+            for layer_name in self._hidden_linear_layer_names()
+            if layer_name in layer_ratios
+        ]
+        for layer_name in reversed(ordered_layers):
+            keep_indices = self.prune_mlp_by_ratio(layer_name, layer_ratios[layer_name])
+            self.prune_linear_block(layer_name, keep_indices)
+        return self.get_structural_parameter_count()
 
-        Returns:
-            剪枝后的总参数量
-        """
-        # 找到所有线性层（按定义顺序）
-        all_linear_layers = []
-        for name, module in self.model.named_modules():
-            if isinstance(module, nn.Linear):
-                all_linear_layers.append(name)
-
-        # 过滤出需要剪枝的层（在 layer_ratios 中指定的）
-        layers_to_prune = [name for name in all_linear_layers if name in layer_ratios]
-
-        if not layers_to_prune:
-            return sum(p.numel() for p in self.model.parameters())
-
-        # 从后往前处理，避免影响前面层的索引计算
-        for layer_name in reversed(layers_to_prune):
-            prune_ratio = layer_ratios[layer_name]
-
-            # 找到下一层
-            layer_idx = all_linear_layers.index(layer_name)
-            next_layer_name = all_linear_layers[layer_idx + 1] if layer_idx + 1 < len(all_linear_layers) else None
-
-            # 计算保留的神经元索引
-            layer = self._get_layer_by_name(layer_name)
-            if not isinstance(layer, nn.Linear):
-                continue
-
-            # 如果是最后一层（分类器），跳过输出剪枝，但需要调整输入
-            if next_layer_name is None:
-                # 分类层不剪枝，跳过
-                continue
-
-            num_neurons = layer.out_features
-            num_keep = int(num_neurons * (1 - prune_ratio))
-
-            if num_keep <= 0:
-                num_keep = 1  # 至少保留一个神经元
-
-            # 使用权重L2范数作为重要性
-            importance_scores = torch.norm(layer.weight.data, p=2, dim=1)
-            _, sorted_indices = torch.sort(importance_scores, descending=True)
-            keep_indices = sorted(sorted_indices[:num_keep].tolist())
-
-            # 应用剪枝：修改当前层的输出
-            layer.weight.data = layer.weight.data[keep_indices, :]
-            if layer.bias is not None:
-                layer.bias.data = layer.bias.data[keep_indices]
-            layer.out_features = len(keep_indices)
-
-            # 查找并调整紧跟的 BatchNorm 层（如果存在）
-            # 在模型结构中，BatchNorm 通常紧跟 Linear 层
-            parent_name = '.'.join(layer_name.split('.')[:-1])
-            layer_idx_in_parent = int(layer_name.split('.')[-1])
-            bn_name = f"{parent_name}.{layer_idx_in_parent + 1}"
-
-            try:
-                bn_layer = self._get_layer_by_name(bn_name)
-                if isinstance(bn_layer, nn.BatchNorm1d):
-                    # 调整 BatchNorm 的所有参数
-                    bn_layer.weight.data = bn_layer.weight.data[keep_indices]
-                    bn_layer.bias.data = bn_layer.bias.data[keep_indices]
-                    bn_layer.running_mean = bn_layer.running_mean[keep_indices]
-                    bn_layer.running_var = bn_layer.running_var[keep_indices]
-                    bn_layer.num_features = len(keep_indices)
-            except (AttributeError, ValueError):
-                # 没有找到 BatchNorm 层，跳过
-                pass
-
-            # 修改下一个 Linear 层的输入维度
-            next_layer = self._get_layer_by_name(next_layer_name)
-            if isinstance(next_layer, nn.Linear):
-                next_layer.weight.data = next_layer.weight.data[:, keep_indices]
-                next_layer.in_features = len(keep_indices)
-
-        # 返回剪枝后的参数量
-        return sum(p.numel() for p in self.model.parameters())
-
-    def create_pruned_model(
-        self,
-        pruning_config: Dict[str, float]
-    ) -> nn.Module:
-        """
-        根据剪枝配置创建新的剪枝模型
-
-        Args:
-            pruning_config: 剪枝配置字典 {layer_name: prune_ratio}
-
-        Returns:
-            剪枝后的新模型
-        """
-        # 深拷贝原模型
+    def create_pruned_model(self, pruning_config: Dict[str, float]) -> nn.Module:
+        """Create an independently pruned copy of the source model."""
         pruned_model = copy.deepcopy(self.model)
-        pruner = StructuredPruning(pruned_model)
-
-        # 按层剪枝
-        for layer_name, prune_ratio in pruning_config.items():
-            keep_indices = pruner.prune_mlp_by_ratio(layer_name, prune_ratio)
-
-            # 找到下一层并一起剪枝
-            next_layer = pruner._find_next_layer(layer_name)
-            if next_layer:
-                pruner.prune_connected_layers(layer_name, next_layer, keep_indices)
-
+        StructuredPruning(pruned_model).prune_by_layer(pruning_config)
         return pruned_model
 
     def _get_layer_by_name(self, layer_name: str) -> nn.Module:
-        """
-        通过名称获取层
+        if not isinstance(layer_name, str) or not layer_name:
+            raise ValueError("layer_name must be a non-empty string")
 
-        Args:
-            layer_name: 层名称 (支持点号分隔，如 'features.0')
-
-        Returns:
-            对应的层对象
-        """
-        parts = layer_name.split('.')
         module = self.model
-
-        for part in parts:
-            if part.isdigit():
-                module = module[int(part)]
-            else:
-                module = getattr(module, part)
-
+        try:
+            for part in layer_name.split("."):
+                module = module[int(part)] if part.isdigit() else getattr(module, part)
+        except (AttributeError, IndexError, KeyError, TypeError) as error:
+            raise ValueError(f"Unknown layer: {layer_name}") from error
         return module
 
+    def _replace_layer(self, layer_name: str, replacement: nn.Module) -> None:
+        parts = layer_name.split(".")
+        parent = self.model
+        try:
+            for part in parts[:-1]:
+                parent = parent[int(part)] if part.isdigit() else getattr(parent, part)
+            last_part = parts[-1]
+            if last_part.isdigit():
+                parent[int(last_part)] = replacement
+            else:
+                setattr(parent, last_part, replacement)
+        except (AttributeError, IndexError, KeyError, TypeError) as error:
+            raise ValueError(f"Unable to replace layer: {layer_name}") from error
+
+    def _linear_layer_names(self) -> List[str]:
+        return [
+            name for name, module in self.model.named_modules() if isinstance(module, nn.Linear)
+        ]
+
+    def _hidden_linear_layer_names(self) -> List[str]:
+        linear_layers = self._linear_layer_names()
+        return linear_layers[:-1]
+
     def _find_next_layer(self, layer_name: str) -> Optional[str]:
-        """
-        找到当前层的下一层
+        linear_layers = self._linear_layer_names()
+        try:
+            index = linear_layers.index(layer_name)
+        except ValueError:
+            return None
+        return linear_layers[index + 1] if index + 1 < len(linear_layers) else None
 
-        Args:
-            layer_name: 当前层名称
+    def _find_following_batch_norm(self, layer_name: str) -> Optional[str]:
+        named_modules = list(self.model.named_modules())
+        names = [name for name, _ in named_modules]
+        try:
+            start_index = names.index(layer_name)
+        except ValueError:
+            return None
 
-        Returns:
-            下一层名称，如果不存在则返回 None
-        """
-        # 简单实现：假设是 features.N 格式
-        if 'features' in layer_name:
-            parts = layer_name.split('.')
-            if len(parts) == 2 and parts[1].isdigit():
-                next_idx = int(parts[1]) + 1
-                # 跳过 BatchNorm 和 激活层，找到下一个 Linear
-                for i in range(next_idx, next_idx + 10):
-                    try:
-                        next_layer = self._get_layer_by_name(f'features.{i}')
-                        if isinstance(next_layer, nn.Linear):
-                            return f'features.{i}'
-                    except:
-                        continue
-
+        for name, module in named_modules[start_index + 1 :]:
+            if isinstance(module, nn.Linear):
+                return None
+            if isinstance(module, nn.BatchNorm1d):
+                return name
         return None
 
+    def _validate_hidden_linear(self, layer_name: str) -> nn.Linear:
+        layer = self._get_layer_by_name(layer_name)
+        if not isinstance(layer, nn.Linear):
+            raise ValueError(f"Layer {layer_name} is not a Linear layer")
+        if self._find_next_layer(layer_name) is None:
+            raise ValueError(f"Layer {layer_name} is the final classifier and cannot be pruned")
+        return layer
+
+    @staticmethod
+    def _validate_prune_ratio(prune_ratio: float) -> None:
+        if (
+            isinstance(prune_ratio, bool)
+            or not isinstance(prune_ratio, Real)
+            or not math.isfinite(float(prune_ratio))
+            or not 0.0 <= float(prune_ratio) < 1.0
+        ):
+            raise ValueError("prune_ratio must be finite and in [0.0, 1.0)")
+
+    @staticmethod
+    def _validate_keep_indices(layer: nn.Linear, keep_indices: Sequence[int]) -> List[int]:
+        if isinstance(keep_indices, (str, bytes)) or not isinstance(keep_indices, Sequence):
+            raise ValueError("keep_indices must be a non-empty sequence of integers")
+        if not keep_indices:
+            raise ValueError("keep_indices must not be empty")
+        if any(isinstance(index, bool) or not isinstance(index, Integral) for index in keep_indices):
+            raise ValueError("keep_indices must contain only integers")
+
+        normalized = sorted(int(index) for index in keep_indices)
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("keep_indices must be unique")
+        if normalized[0] < 0 or normalized[-1] >= layer.out_features:
+            raise ValueError("keep_indices contains an out-of-range index")
+        return normalized
+
+    @staticmethod
+    def _validate_importance_scores(
+        layer: nn.Linear, importance_scores: torch.Tensor
+    ) -> torch.Tensor:
+        if not isinstance(importance_scores, torch.Tensor):
+            raise ValueError("importance_scores must be a torch.Tensor")
+        scores = importance_scores.detach().reshape(-1)
+        if importance_scores.ndim != 1 or scores.numel() != layer.out_features:
+            raise ValueError("importance_scores must be one-dimensional and match out_features")
+        if not torch.isfinite(scores).all().item():
+            raise ValueError("importance_scores must contain only finite values")
+        return scores.cpu()
+
+    @staticmethod
+    def _make_pruned_linear_output(layer: nn.Linear, index_tensor: torch.Tensor) -> nn.Linear:
+        replacement = nn.Linear(
+            layer.in_features,
+            index_tensor.numel(),
+            bias=layer.bias is not None,
+            device=layer.weight.device,
+            dtype=layer.weight.dtype,
+        )
+        replacement.train(layer.training)
+        with torch.no_grad():
+            replacement.weight.copy_(layer.weight.index_select(0, index_tensor))
+            if layer.bias is not None:
+                replacement.bias.copy_(layer.bias.index_select(0, index_tensor))
+        replacement.weight.requires_grad_(layer.weight.requires_grad)
+        if layer.bias is not None:
+            replacement.bias.requires_grad_(layer.bias.requires_grad)
+        return replacement
+
+    @staticmethod
+    def _make_pruned_linear_input(layer: nn.Linear, index_tensor: torch.Tensor) -> nn.Linear:
+        replacement = nn.Linear(
+            index_tensor.numel(),
+            layer.out_features,
+            bias=layer.bias is not None,
+            device=layer.weight.device,
+            dtype=layer.weight.dtype,
+        )
+        replacement.train(layer.training)
+        with torch.no_grad():
+            replacement.weight.copy_(layer.weight.index_select(1, index_tensor))
+            if layer.bias is not None:
+                replacement.bias.copy_(layer.bias)
+        replacement.weight.requires_grad_(layer.weight.requires_grad)
+        if layer.bias is not None:
+            replacement.bias.requires_grad_(layer.bias.requires_grad)
+        return replacement
+
+    @staticmethod
+    def _make_pruned_batch_norm(
+        batch_norm: nn.BatchNorm1d, index_tensor: torch.Tensor
+    ) -> nn.BatchNorm1d:
+        replacement = nn.BatchNorm1d(
+            index_tensor.numel(),
+            eps=batch_norm.eps,
+            momentum=batch_norm.momentum,
+            affine=batch_norm.affine,
+            track_running_stats=batch_norm.track_running_stats,
+            device=batch_norm.weight.device if batch_norm.affine else index_tensor.device,
+            dtype=batch_norm.weight.dtype if batch_norm.affine else None,
+        )
+        replacement.train(batch_norm.training)
+        with torch.no_grad():
+            if batch_norm.affine:
+                replacement.weight.copy_(batch_norm.weight.index_select(0, index_tensor))
+                replacement.bias.copy_(batch_norm.bias.index_select(0, index_tensor))
+                replacement.weight.requires_grad_(batch_norm.weight.requires_grad)
+                replacement.bias.requires_grad_(batch_norm.bias.requires_grad)
+            if batch_norm.track_running_stats:
+                replacement.running_mean.copy_(
+                    batch_norm.running_mean.index_select(0, index_tensor)
+                )
+                replacement.running_var.copy_(
+                    batch_norm.running_var.index_select(0, index_tensor)
+                )
+                replacement.num_batches_tracked.copy_(batch_norm.num_batches_tracked)
+        return replacement
+
     def get_sparsity(self) -> float:
-        """
-        计算模型的稀疏度
+        """Return numerical zero density, not physical structural compression."""
+        total_params = self.get_structural_parameter_count()
+        if total_params == 0:
+            return 0.0
+        zero_params = sum((parameter.detach() == 0).sum().item() for parameter in self.model.parameters())
+        return zero_params / total_params
 
-        Returns:
-            稀疏度 (0.0-1.0)
-        """
-        total_params = 0
-        zero_params = 0
-
-        for param in self.model.parameters():
-            total_params += param.numel()
-            zero_params += (param.data == 0).sum().item()
-
-        return zero_params / total_params if total_params > 0 else 0.0
+    def get_structural_parameter_count(self) -> int:
+        """Return the number of physically retained parameters."""
+        return sum(parameter.numel() for parameter in self.model.parameters())
 
     def get_model_info(self) -> Dict:
-        """
-        获取模型信息
-
-        Returns:
-            包含参数量、稀疏度等信息的字典
-        """
-        total_params = sum(p.numel() for p in self.model.parameters())
-        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-
+        total_params = self.get_structural_parameter_count()
+        trainable_params = sum(
+            parameter.numel() for parameter in self.model.parameters() if parameter.requires_grad
+        )
         return {
-            'total_params': total_params,
-            'trainable_params': trainable_params,
-            'sparsity': self.get_sparsity(),
-            'model_size_mb': sum(p.numel() * p.element_size() for p in self.model.parameters()) / (1024 ** 2)
+            "total_params": total_params,
+            "structural_parameter_count": total_params,
+            "trainable_params": trainable_params,
+            "sparsity": self.get_sparsity(),
+            "model_size_mb": sum(
+                parameter.numel() * parameter.element_size()
+                for parameter in self.model.parameters()
+            ) / (1024 ** 2),
         }
 
 
 def apply_pruning_mask(model: nn.Module, masks: Dict[str, torch.Tensor]) -> None:
-    """
-    应用剪枝掩码到模型
-
-    Args:
-        model: 待剪枝的模型
-        masks: 剪枝掩码字典 {layer_name: mask_tensor}
-    """
-    for name, param in model.named_parameters():
+    """Apply unstructured pruning masks to named parameters."""
+    for name, parameter in model.named_parameters():
         if name in masks:
             with torch.no_grad():
-                param.data *= masks[name]
+                parameter.mul_(masks[name])
 
 
-def compute_layer_importance(
-    layer: nn.Linear,
-    method: str = 'l2'
-) -> torch.Tensor:
-    """
-    计算层中每个神经元的重要性分数
-
-    Args:
-        layer: 线性层
-        method: 计算方法 ('l2', 'l1', 'variance')
-
-    Returns:
-        重要性分数张量 (out_features,)
-    """
-    if method == 'l2':
-        # L2 范数
-        importance = torch.norm(layer.weight.data, p=2, dim=1)
-    elif method == 'l1':
-        # L1 范数
-        importance = torch.norm(layer.weight.data, p=1, dim=1)
-    elif method == 'variance':
-        # 方差
-        importance = torch.var(layer.weight.data, dim=1)
-    else:
-        raise ValueError(f"Unknown method: {method}")
-
-    return importance
+def compute_layer_importance(layer: nn.Linear, method: str = "l2") -> torch.Tensor:
+    """Compute per-output-neuron importance for a Linear layer."""
+    if method == "l2":
+        return torch.norm(layer.weight.detach(), p=2, dim=1)
+    if method == "l1":
+        return torch.norm(layer.weight.detach(), p=1, dim=1)
+    if method == "variance":
+        return torch.var(layer.weight.detach(), dim=1)
+    raise ValueError(f"Unknown method: {method}")
 
 
-if __name__ == '__main__':
-    # 测试剪枝功能
-    print("=" * 70)
-    print("")
-    print("=" * 70)
-
-    # 创建简单的 MLP
-    class SimpleMLP(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.features = nn.Sequential(
-                nn.Linear(784, 512),
-                nn.ReLU(),
-                nn.Linear(512, 256),
-                nn.ReLU(),
-                nn.Linear(256, 128),
-                nn.ReLU()
-            )
-            self.classifier = nn.Linear(128, 10)
-
-        def forward(self, x):
-            x = x.view(x.size(0), -1)
-            x = self.features(x)
-            return self.classifier(x)
-
-    # 创建模型
-    model = SimpleMLP()
-    print(f"\n: {sum(p.numel() for p in model.parameters()):,}")
-
-    # 创建剪枝器
-    pruner = StructuredPruning(model)
-
-    # 测试按比例剪枝
-    print("\n features.0  (50% )")
-    keep_indices = pruner.prune_mlp_by_ratio('features.0', prune_ratio=0.5)
-    print(f": {len(keep_indices)} / 512")
-
-    # 剪枝连接层
-    pruner.prune_connected_layers('features.0', 'features.2', keep_indices)
-
-    # 打印剪枝后信息
-    info = pruner.get_model_info()
-    print(f"\n:")
-    print(f"  : {info['total_params']:,}")
-    print(f"  : {info['model_size_mb']:.2f} MB")
-    print(f"  : {info['sparsity']:.2%}")
-
-    # 测试前向传播
-    dummy_input = torch.randn(4, 784)
-    output = model(dummy_input)
-    print(f"\n:")
-    print(f"  : {dummy_input.shape}")
-    print(f"  : {output.shape}")
-
-    print("\n[SUCCESS] !")
-
-
-# 为了向后兼容，提供 StructuredPruner 别名
 StructuredPruner = StructuredPruning

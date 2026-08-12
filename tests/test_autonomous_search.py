@@ -1,0 +1,154 @@
+import copy
+import json
+
+import torch
+from torch.utils.data import DataLoader, TensorDataset
+
+from src.autonomous_search import AutonomousSearch, candidate_fingerprint
+from src.controller.heuristic_controller import HeuristicController
+from src.evaluation.cheap_critic import CheapCriticResult
+from src.models.dense_baseline import MLP
+
+
+class FixedCritic:
+    def evaluate(self, model, dataloader, max_samples, device):
+        return CheapCriticResult(
+            loss=0.1,
+            accuracy=90.0,
+            samples=min(max_samples, len(dataloader.dataset)),
+            parameter_count=sum(parameter.numel() for parameter in model.parameters()),
+            nonzero_parameter_count=sum(
+                (parameter.detach() != 0).sum().item() for parameter in model.parameters()
+            ),
+            elapsed_seconds=0.0,
+        )
+
+
+def make_model():
+    torch.manual_seed(13)
+    return MLP(
+        input_dim=4,
+        hidden_dims=[4, 3],
+        num_classes=2,
+        dropout_rate=0.0,
+        use_batch_norm=False,
+    )
+
+
+def make_loader():
+    torch.manual_seed(3)
+    return DataLoader(
+        TensorDataset(torch.randn(12, 4), torch.randint(0, 2, (12,))),
+        batch_size=4,
+        shuffle=False,
+    )
+
+
+def evaluator(model, loader, device):
+    return {"loss": 0.1, "accuracy": 90.0, "samples": len(loader.dataset)}
+
+
+def importance(model, loader, device):
+    return {"features.0": torch.tensor([4.0, 3.0, 2.0, 1.0])}
+
+
+def recovery(model, train_loader, validation_loader, **kwargs):
+    return model, {"best_test_acc": 90.0}
+
+
+def test_candidate_fingerprint_is_order_independent():
+    assert candidate_fingerprint({"features.3": 0.5, "features.0": 0.3}) == candidate_fingerprint(
+        {"features.0": 0.3, "features.3": 0.5}
+    )
+
+
+def test_search_accepts_pruned_copy_without_mutating_source_model():
+    source = make_model()
+    source_state = copy.deepcopy(source.state_dict())
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=5.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=importance,
+        recovery_fn=recovery,
+    )
+
+    accepted, history = search.run(
+        source,
+        make_loader(),
+        make_loader(),
+        max_iterations=1,
+        candidate_ratios=(0.5,),
+        candidates_per_round=1,
+        cheap_eval_samples=5,
+        recovery_epochs=0,
+    )
+
+    assert accepted is not source
+    assert accepted.features[0].out_features == 2
+    assert source.features[0].out_features == 4
+    for name, expected in source_state.items():
+        assert torch.equal(source.state_dict()[name], expected), name
+    assert history.events[0]["final_action"] == "accept"
+    json.dumps(history.to_dict())
+
+
+def test_full_validation_rejection_leaves_accepted_model_unchanged():
+    source = make_model()
+    source_state = copy.deepcopy(source.state_dict())
+    evaluations = iter(
+        [
+            {"loss": 0.1, "accuracy": 90.0, "samples": 12},
+            {"loss": 0.5, "accuracy": 80.0, "samples": 12},
+        ]
+    )
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=1.0),
+        critic=FixedCritic(),
+        evaluator=lambda *args: next(evaluations),
+        importance_fn=importance,
+        recovery_fn=recovery,
+    )
+
+    accepted, history = search.run(
+        source,
+        make_loader(),
+        make_loader(),
+        max_iterations=1,
+        candidate_ratios=(0.5,),
+        candidates_per_round=1,
+        cheap_eval_samples=5,
+        recovery_epochs=0,
+    )
+
+    assert accepted.features[0].out_features == 4
+    assert history.events[0]["final_action"] == "reject"
+    assert history.events[0]["final_reason"] == "full_validation_failed"
+    for name, expected in source_state.items():
+        assert torch.equal(source.state_dict()[name], expected), name
+
+
+def test_search_skips_previously_attempted_configurations():
+    source = make_model()
+    search = AutonomousSearch(
+        controller=HeuristicController(),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=importance,
+        recovery_fn=recovery,
+    )
+
+    _, history = search.run(
+        source,
+        make_loader(),
+        make_loader(),
+        max_iterations=3,
+        candidate_ratios=(0.5,),
+        candidates_per_round=1,
+        cheap_eval_samples=5,
+        recovery_epochs=0,
+    )
+
+    assert len(history.events) == 2
+    assert history.events[-1]["action"] == "stop"
+    assert history.events[-1]["reason"] == "no_new_candidates"
