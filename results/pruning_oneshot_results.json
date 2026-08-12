@@ -1,0 +1,36 @@
+{
+  "original": {
+    "accuracy": 98.43,
+    "params": 569226
+  },
+  "pruned_results": [
+    {
+      "prune_ratio": 0.3,
+      "params": 363463,
+      "compression_ratio": 1.5661181468264995,
+      "accuracy": 91.8,
+      "acc_drop": 6.63000000000001
+    },
+    {
+      "prune_ratio": 0.5,
+      "params": 243658,
+      "compression_ratio": 2.3361679074768733,
+      "accuracy": 67.87,
+      "acc_drop": 30.560000000000002
+    },
+    {
+      "prune_ratio": 0.7,
+      "params": 135659,
+      "compression_ratio": 4.196006162510412,
+      "accuracy": 16.8,
+      "acc_drop": 81.63000000000001
+    },
+    {
+      "prune_ratio": 0.9,
+      "params": 41953,
+      "compression_ratio": 13.568183443377112,
+      "accuracy": 22.81,
+      "acc_drop": 75.62
+    }
+  ]
+}
