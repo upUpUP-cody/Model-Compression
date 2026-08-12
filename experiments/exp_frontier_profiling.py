@@ -90,38 +90,38 @@ def main():
     print("Key Findings")
     print("="*60)
 
-    print("\n🎯 最佳权衡点:")
+    print("\n[Best Tradeoff]")
     bt = analysis['best_tradeoff']
-    print(f"   剪枝比例: {bt['prune_ratio']:.0%}")
-    print(f"   准确率: {bt['accuracy']:.2f}%")
-    print(f"   压缩率: {bt['compression']:.2f}x")
-    print(f"   效率分数: {bt['efficiency_score']:.2f}")
+    print(f"   Prune ratio: {bt['prune_ratio']:.0%}")
+    print(f"   Accuracy: {bt['accuracy']:.2f}%")
+    print(f"   Compression: {bt['compression']:.2f}x")
+    print(f"   Efficiency score: {bt['efficiency_score']:.2f}")
 
-    print("\n✅ 最大可接受压缩 (< 1% 性能损失):")
+    print("\n[Max Acceptable Compression (< 1% loss)]")
     ma = analysis['max_acceptable']
-    print(f"   剪枝比例: {ma['prune_ratio']:.0%}")
-    print(f"   准确率: {ma['accuracy']:.2f}%")
-    print(f"   压缩率: {ma['compression']:.2f}x")
-    print(f"   准确率下降: {ma['accuracy_drop']:.2f}%")
+    print(f"   Prune ratio: {ma['prune_ratio']:.0%}")
+    print(f"   Accuracy: {ma['accuracy']:.2f}%")
+    print(f"   Compression: {ma['compression']:.2f}x")
+    print(f"   Accuracy drop: {ma['accuracy_drop']:.2f}%")
 
-    print("\n📉 性能拐点:")
+    print("\n[Knee Point]")
     kp = analysis['knee_point']
-    print(f"   剪枝比例: {kp['prune_ratio']:.0%}")
-    print(f"   准确率: {kp['accuracy']:.2f}%")
-    print(f"   压缩率: {kp['compression']:.2f}x")
-    print(f"   说明: {kp['description']}")
+    print(f"   Prune ratio: {kp['prune_ratio']:.0%}")
+    print(f"   Accuracy: {kp['accuracy']:.2f}%")
+    print(f"   Compression: {kp['compression']:.2f}x")
+    print(f"   Note: {kp['description']}")
 
-    print("\n🏆 最高准确率:")
+    print("\n[Best Accuracy]")
     ba = analysis['best_accuracy']
-    print(f"   剪枝比例: {ba['prune_ratio']:.0%}")
-    print(f"   准确率: {ba['accuracy']:.2f}%")
-    print(f"   压缩率: {ba['compression']:.2f}x")
+    print(f"   Prune ratio: {ba['prune_ratio']:.0%}")
+    print(f"   Accuracy: {ba['accuracy']:.2f}%")
+    print(f"   Compression: {ba['compression']:.2f}x")
 
-    print("\n💪 最大压缩:")
+    print("\n[Best Compression]")
     bc = analysis['best_compression']
-    print(f"   剪枝比例: {bc['prune_ratio']:.0%}")
-    print(f"   准确率: {bc['accuracy']:.2f}%")
-    print(f"   压缩率: {bc['compression']:.2f}x")
+    print(f"   Prune ratio: {bc['prune_ratio']:.0%}")
+    print(f"   Accuracy: {bc['accuracy']:.2f}%")
+    print(f"   Compression: {bc['compression']:.2f}x")
 
     print("\n" + "="*60)
     print("[OK] Frontier Profiling Complete!")

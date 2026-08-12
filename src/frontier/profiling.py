@@ -207,17 +207,17 @@ class FrontierProfiler:
             print(f"\n{'='*60}")
             print("Frontier Analysis")
             print(f"{'='*60}")
-            print(f"\n🎯 推荐配置:")
-            print(f"  最佳权衡点: {best_tradeoff['prune_ratio']:.0%} 剪枝")
-            print(f"    → {best_tradeoff['recovered_acc']:.2f}% 准确率")
-            print(f"    → {best_tradeoff['compression_ratio']:.2f}x 压缩")
-            print(f"\n  最大可接受压缩 (< 1% 损失):")
-            print(f"    → {max_acceptable['prune_ratio']:.0%} 剪枝")
-            print(f"    → {max_acceptable['recovered_acc']:.2f}% 准确率")
-            print(f"    → {max_acceptable['compression_ratio']:.2f}x 压缩")
-            print(f"\n  性能拐点:")
-            print(f"    → {knee_point['prune_ratio']:.0%} 剪枝")
-            print(f"    → {knee_point['recovered_acc']:.2f}% 准确率")
+            print(f"\n[Best Tradeoff]")
+            print(f"  Prune ratio: {best_tradeoff['prune_ratio']:.0%}")
+            print(f"    -> Accuracy: {best_tradeoff['recovered_acc']:.2f}%")
+            print(f"    -> Compression: {best_tradeoff['compression_ratio']:.2f}x")
+            print(f"\n  Max acceptable compression (< 1% loss):")
+            print(f"    -> Prune ratio: {max_acceptable['prune_ratio']:.0%}")
+            print(f"    -> Accuracy: {max_acceptable['recovered_acc']:.2f}%")
+            print(f"    -> Compression: {max_acceptable['compression_ratio']:.2f}x")
+            print(f"\n  Knee point:")
+            print(f"    -> Prune ratio: {knee_point['prune_ratio']:.0%}")
+            print(f"    -> Accuracy: {knee_point['recovered_acc']:.2f}%")
             print(f"{'='*60}\n")
 
         return analysis
@@ -257,7 +257,7 @@ class FrontierProfiler:
         try:
             import matplotlib.pyplot as plt
         except ImportError:
-            print("⚠ matplotlib not available, skipping plot")
+            print("[WARNING] matplotlib not available, skipping plot")
             return
 
         points = results['frontier_points']
