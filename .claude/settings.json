@@ -16,7 +16,8 @@
       "Bash(python check_environment.py)",
       "Bash(python test_imports.py)",
       "Bash(python check_gpu.py)",
-      "Bash(git commit -m 'Add environment verification scripts and complete dependency installation *)"
+      "Bash(git commit -m 'Add environment verification scripts and complete dependency installation *)",
+      "Bash(apply_patch)"
     ],
     "additionalDirectories": [
       "D:\\Compression\\Model-Compression\\src\\models"
