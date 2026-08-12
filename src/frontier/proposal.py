@@ -133,8 +133,8 @@ class LotteryTicketProposer:
         """
         保守策略: 按敏感度反比例分配剪枝比例
 
-        高敏感度 → 低剪枝比例
-        低敏感度 → 高剪枝比例
+        高敏感度 -> 低剪枝比例
+        低敏感度 -> 高剪枝比例
         """
         # 归一化敏感度到 [0, 1]
         sens_values = np.array(list(sensitivities.values()))
@@ -148,7 +148,7 @@ class LotteryTicketProposer:
         else:
             norm_sens = {name: 0.5 for name in sensitivities.keys()}
 
-        # 敏感度高 → 剪枝比例低
+        # 敏感度高 -> 剪枝比例低
         # 使用反比例关系: ratio = max_ratio * (1 - sensitivity)
         max_ratio = 0.8  # 最大剪枝80%
         min_ratio = 0.1  # 最小剪枝10%
@@ -245,10 +245,10 @@ class LotteryTicketProposer:
 
             # 计算缩放因子
             if current_compression < target_compression:
-                # 需要更多压缩 → 增加剪枝比例
+                # 需要更多压缩 -> 增加剪枝比例
                 scale = 1.1
             else:
-                # 压缩过度 → 减少剪枝比例
+                # 压缩过度 -> 减少剪枝比例
                 scale = 0.9
 
             # 应用缩放

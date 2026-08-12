@@ -22,30 +22,30 @@ def test_model(checkpoint_path: str):
         checkpoint_path: 模型检查点路径
     """
     print("=" * 70)
-    print("模型测试")
+    print("")
     print("=" * 70)
 
     # 加载数据
-    print("\n加载测试数据...")
+    print("\n...")
     _, test_loader = get_mnist_loaders(batch_size=128, num_workers=0)
-    print(f"[OK] 测试批次数: {len(test_loader)}")
+    print(f"[OK] : {len(test_loader)}")
 
     # 创建模型
-    print("\n创建模型...")
+    print("\n...")
     model = create_mnist_baseline()
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = model.to(device)
 
     # 加载权重
-    print(f"\n加载检查点: {checkpoint_path}")
+    print(f"\n: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
-    print(f"[OK] 检查点轮次: {checkpoint['epoch']}")
-    print(f"[OK] 检查点准确率: {checkpoint['test_acc']:.2f}%")
+    print(f"[OK] : {checkpoint['epoch']}")
+    print(f"[OK] : {checkpoint['test_acc']:.2f}%")
 
     # 评估模型
     print("\n" + "-" * 70)
-    print("评估模型...")
+    print("...")
     model.eval()
     correct = 0
     total = 0
@@ -64,16 +64,16 @@ def test_model(checkpoint_path: str):
     accuracy = 100.0 * correct / total
 
     # 打印结果
-    print(f"\n测试结果:")
-    print(f"  准确率: {accuracy:.2f}%")
-    print(f"  正确数: {correct}/{total}")
-    print(f"  推理时间: {inference_time:.2f} 秒")
-    print(f"  平均每样本: {inference_time/total*1000:.2f} ms")
+    print(f"\n:")
+    print(f"  : {accuracy:.2f}%")
+    print(f"  : {correct}/{total}")
+    print(f"  : {inference_time:.2f} ")
+    print(f"  : {inference_time/total*1000:.2f} ms")
 
     # 模型信息
-    print(f"\n模型信息:")
-    print(f"  参数量: {model.get_num_parameters():,}")
-    print(f"  模型大小: {model.get_model_size_mb():.2f} MB")
+    print(f"\n:")
+    print(f"  : {model.get_num_parameters():,}")
+    print(f"  : {model.get_model_size_mb():.2f} MB")
 
     return accuracy
 

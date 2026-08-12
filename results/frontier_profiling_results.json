@@ -1,0 +1,119 @@
+{
+  "original": {
+    "accuracy": 98.43,
+    "params": 569226
+  },
+  "frontier_points": [
+    {
+      "prune_ratio": 0.1,
+      "params": 496465,
+      "compression_ratio": 1.1465581662352835,
+      "pruned_acc": 98.26,
+      "recovered_acc": 98.51,
+      "accuracy_drop": -0.0799999999999983,
+      "efficiency_score": 85.91801349551848
+    },
+    {
+      "prune_ratio": 0.2,
+      "params": 428075,
+      "compression_ratio": 1.329734275535829,
+      "pruned_acc": 97.59,
+      "recovered_acc": 98.57,
+      "accuracy_drop": -0.13999999999998636,
+      "efficiency_score": 74.12759211631231
+    },
+    {
+      "prune_ratio": 0.30000000000000004,
+      "params": 363463,
+      "compression_ratio": 1.5661181468264995,
+      "pruned_acc": 93.08,
+      "recovered_acc": 98.5,
+      "accuracy_drop": -0.06999999999999318,
+      "efficiency_score": 62.8943609392403
+    },
+    {
+      "prune_ratio": 0.4,
+      "params": 301665,
+      "compression_ratio": 1.886947441698573,
+      "pruned_acc": 78.93,
+      "recovered_acc": 98.48,
+      "accuracy_drop": -0.04999999999999716,
+      "efficiency_score": 52.190112890135026
+    },
+    {
+      "prune_ratio": 0.5,
+      "params": 243658,
+      "compression_ratio": 2.3361679074768733,
+      "pruned_acc": 49.93,
+      "recovered_acc": 98.45,
+      "accuracy_drop": -0.01999999999999602,
+      "efficiency_score": 42.14166271393085
+    },
+    {
+      "prune_ratio": 0.6000000000000001,
+      "params": 187537,
+      "compression_ratio": 3.0352730394535476,
+      "pruned_acc": 31.18,
+      "recovered_acc": 98.37,
+      "accuracy_drop": 0.060000000000002274,
+      "efficiency_score": 32.40894598981776
+    },
+    {
+      "prune_ratio": 0.7000000000000001,
+      "params": 135659,
+      "compression_ratio": 4.196006162510412,
+      "pruned_acc": 15.95,
+      "recovered_acc": 98.34,
+      "accuracy_drop": 0.09000000000000341,
+      "efficiency_score": 23.43657187127784
+    },
+    {
+      "prune_ratio": 0.8,
+      "params": 87239,
+      "compression_ratio": 6.524902853081764,
+      "pruned_acc": 9.95,
+      "recovered_acc": 98.12,
+      "accuracy_drop": 0.3100000000000023,
+      "efficiency_score": 15.037771781331141
+    },
+    {
+      "prune_ratio": 0.9,
+      "params": 41953,
+      "compression_ratio": 13.568183443377112,
+      "pruned_acc": 9.74,
+      "recovered_acc": 97.26,
+      "accuracy_drop": 1.1700000000000017,
+      "efficiency_score": 7.168240347419127
+    }
+  ],
+  "analysis": {
+    "best_compression": {
+      "prune_ratio": 0.9,
+      "accuracy": 97.26,
+      "compression": 13.568183443377112
+    },
+    "best_accuracy": {
+      "prune_ratio": 0.2,
+      "accuracy": 98.57,
+      "compression": 1.329734275535829
+    },
+    "best_tradeoff": {
+      "prune_ratio": 0.1,
+      "accuracy": 98.51,
+      "compression": 1.1465581662352835,
+      "efficiency_score": 85.91801349551848
+    },
+    "max_acceptable": {
+      "prune_ratio": 0.8,
+      "accuracy": 98.12,
+      "compression": 6.524902853081764,
+      "accuracy_drop": 0.3100000000000023
+    },
+    "knee_point": {
+      "prune_ratio": 0.8,
+      "accuracy": 98.12,
+      "compression": 6.524902853081764,
+      "description": "\u6027\u80fd\u4e0b\u964d\u52a0\u901f\u7684\u62d0\u70b9"
+    }
+  }
+}

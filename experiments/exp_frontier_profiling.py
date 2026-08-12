@@ -72,7 +72,7 @@ def main():
     print("Detailed Frontier Analysis")
     print("="*60)
 
-    print("\n📊 All Frontier Points:")
+    print("\n All Frontier Points:")
     print(f"{'Prune%':>8} {'Params':>10} {'Compress':>10} {'Pruned%':>10} {'Recover%':>10} {'Drop%':>8}")
     print("-" * 70)
 

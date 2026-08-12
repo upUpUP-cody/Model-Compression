@@ -313,19 +313,19 @@ def compare_sensitivity_methods(
     results = {}
 
     # 权重幅度（最快）
-    print("计算权重幅度敏感度...")
+    print("...")
     results['magnitude'] = analyzer.compute_layer_sensitivity(
         dataloader, method='magnitude', num_batches=num_batches
     )
 
     # Wanda 分数（中等速度）
-    print("计算 Wanda 敏感度...")
+    print(" Wanda ...")
     results['wanda'] = analyzer.compute_layer_sensitivity(
         dataloader, method='wanda', num_batches=num_batches
     )
 
     # 梯度敏感度（较慢）
-    print("计算梯度敏感度...")
+    print("...")
     results['gradient'] = analyzer.compute_layer_sensitivity(
         dataloader, method='gradient', num_batches=num_batches
     )
@@ -341,22 +341,22 @@ if __name__ == '__main__':
     sys.path.insert(0, str(project_root))
 
     print("=" * 70)
-    print("测试敏感度分析")
+    print("")
     print("=" * 70)
 
     # 创建简单模型
     from src.models.dense_baseline import create_mnist_baseline
     from src.utils.data_loader import get_mnist_loaders
 
-    print("\n加载模型和数据...")
+    print("\n...")
     model = create_mnist_baseline()
     train_loader, _ = get_mnist_loaders(batch_size=64, num_workers=0)
 
-    print("\n创建敏感度分析器...")
+    print("\n...")
     analyzer = SensitivityAnalyzer(model, device='cpu')
 
     # 测试权重幅度
-    print("\n[1] 权重幅度敏感度:")
+    print("\n[1] :")
     magnitude_scores = analyzer.compute_layer_sensitivity(
         train_loader, method='magnitude'
     )
@@ -364,7 +364,7 @@ if __name__ == '__main__':
         print(f"  {name}: {score:.4f}")
 
     # 测试 Wanda
-    print("\n[2] Wanda 敏感度 (使用前5个批次):")
+    print("\n[2] Wanda  (5):")
     wanda_scores = analyzer.compute_layer_sensitivity(
         train_loader, method='wanda', num_batches=5
     )
@@ -372,11 +372,11 @@ if __name__ == '__main__':
         print(f"  {name}: {score:.4f}")
 
     # 排序
-    print("\n[3] 按 Wanda 分数排序:")
+    print("\n[3]  Wanda :")
     ranked = analyzer.rank_layers_by_sensitivity(
         train_loader, method='wanda', num_batches=5
     )
     for name, score in ranked[:5]:
         print(f"  {name}: {score:.4f}")
 
-    print("\n[SUCCESS] 敏感度分析测试通过!")
+    print("\n[SUCCESS] !")

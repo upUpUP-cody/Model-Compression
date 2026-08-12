@@ -32,33 +32,33 @@ def main():
         'save_path': './checkpoints/mnist_dense_baseline.pth'
     }
 
-    print("\n配置信息:")
+    print("\n:")
     for key, value in config.items():
         print(f"  {key}: {value}")
 
     # 加载数据
     print("\n" + "-" * 70)
-    print("加载 MNIST 数据集...")
+    print(" MNIST ...")
     train_loader, test_loader = get_mnist_loaders(
         batch_size=config['batch_size'],
         num_workers=0  # CPU 环境使用 0
     )
-    print(f"[OK] 训练批次数: {len(train_loader)}")
-    print(f"[OK] 测试批次数: {len(test_loader)}")
+    print(f"[OK] : {len(train_loader)}")
+    print(f"[OK] : {len(test_loader)}")
 
     # 创建模型
     print("\n" + "-" * 70)
-    print("创建 Dense Baseline 模型...")
+    print(" Dense Baseline ...")
     model = create_mnist_baseline(
         hidden_dims=config['hidden_dims'],
         dropout_rate=config['dropout_rate']
     )
-    print(f"[OK] 参数量: {model.get_num_parameters():,}")
-    print(f"[OK] 模型大小: {model.get_model_size_mb():.2f} MB")
+    print(f"[OK] : {model.get_num_parameters():,}")
+    print(f"[OK] : {model.get_model_size_mb():.2f} MB")
 
     # 创建训练器
     print("\n" + "-" * 70)
-    print(f"初始化训练器 (Device: {config['device']})...")
+    print(f" (Device: {config['device']})...")
     trainer = ModelTrainer(
         model=model,
         device=config['device'],
@@ -68,7 +68,7 @@ def main():
 
     # 训练模型
     print("\n" + "-" * 70)
-    print("开始训练...")
+    print("...")
     start_time = time.time()
 
     history = trainer.train(
@@ -83,35 +83,35 @@ def main():
 
     # 最终评估
     print("\n" + "=" * 70)
-    print("训练完成!")
+    print("!")
     print("=" * 70)
 
     final_train_acc = history['train_acc'][-1]
     final_test_acc = history['test_acc'][-1]
     best_test_acc = max(history['test_acc'])
 
-    print(f"\n最终结果:")
-    print(f"  训练准确率: {final_train_acc:.2f}%")
-    print(f"  测试准确率: {final_test_acc:.2f}%")
-    print(f"  最佳测试准确率: {best_test_acc:.2f}%")
-    print(f"  训练时间: {train_time:.2f} 秒 ({train_time/60:.2f} 分钟)")
-    print(f"  平均每轮: {train_time/config['epochs']:.2f} 秒")
+    print(f"\n:")
+    print(f"  : {final_train_acc:.2f}%")
+    print(f"  : {final_test_acc:.2f}%")
+    print(f"  : {best_test_acc:.2f}%")
+    print(f"  : {train_time:.2f}  ({train_time/60:.2f} )")
+    print(f"  : {train_time/config['epochs']:.2f} ")
 
     # 验证成功标准
     print("\n" + "-" * 70)
-    print("验证成功标准:")
+    print(":")
     success = True
 
     if best_test_acc >= 98.0:
-        print(f"  [PASS] 测试准确率 >= 98%: {best_test_acc:.2f}%")
+        print(f"  [PASS]  >= 98%: {best_test_acc:.2f}%")
     else:
-        print(f"  [FAIL] 测试准确率 >= 98%: {best_test_acc:.2f}%")
+        print(f"  [FAIL]  >= 98%: {best_test_acc:.2f}%")
         success = False
 
     if success:
-        print("\n[SUCCESS] 步骤 A.1 完成! Dense Baseline 训练成功!")
+        print("\n[SUCCESS]  A.1 ! Dense Baseline !")
     else:
-        print("\n[WARNING] 未达到预期标准，可能需要调整超参数")
+        print("\n[WARNING] ")
 
     # 保存训练历史
     import json
@@ -130,7 +130,7 @@ def main():
             }
         }, f, indent=2)
 
-    print(f"\n训练历史已保存至: {history_path}")
+    print(f"\n: {history_path}")
 
     return history, best_test_acc
 

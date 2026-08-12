@@ -318,29 +318,29 @@ def create_mnist_baseline(
 if __name__ == '__main__':
     # 测试模型
     print("=" * 60)
-    print("测试 MLP Dense Baseline 模型")
+    print(" MLP Dense Baseline ")
     print("=" * 60)
 
     # 创建模型
     model = create_mnist_baseline()
 
     # 打印模型信息
-    print(f"\n模型架构:")
+    print(f"\n:")
     print(model)
 
-    print(f"\n模型统计:")
-    print(f"  参数量: {model.get_num_parameters():,}")
-    print(f"  模型大小: {model.get_model_size_mb():.2f} MB")
+    print(f"\n:")
+    print(f"  : {model.get_num_parameters():,}")
+    print(f"  : {model.get_model_size_mb():.2f} MB")
 
     # 测试前向传播
     dummy_input = torch.randn(4, 1, 28, 28)
     output = model(dummy_input)
-    print(f"\n前向传播测试:")
-    print(f"  输入形状: {dummy_input.shape}")
-    print(f"  输出形状: {output.shape}")
-    print(f"  输出样例: {output[0][:5]}")
+    print(f"\n:")
+    print(f"  : {dummy_input.shape}")
+    print(f"  : {output.shape}")
+    print(f"  : {output[0][:5]}")
 
-    print("\n[SUCCESS] 模型测试通过!")
+    print("\n[SUCCESS] !")
 
 
 # 为了向后兼容，提供 DenseBaseline 别名

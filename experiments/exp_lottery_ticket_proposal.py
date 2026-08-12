@@ -90,7 +90,7 @@ def main():
     print(f"{'='*70}\n")
 
     for comp, results in all_results.items():
-        print(f"\n📊 Target Compression: {comp}")
+        print(f"\n Target Compression: {comp}")
         print("-" * 70)
 
         if results:
@@ -107,10 +107,10 @@ def main():
             # 最佳方案
             best = results[0]
             print(f"\n[BEST] Best strategy: {best['strategy']}")
-            print(f"   → {best['recovered_accuracy']:.2f}% accuracy")
-            print(f"   → {best['actual_compression']:.2f}x compression")
+            print(f"   -> {best['recovered_accuracy']:.2f}% accuracy")
+            print(f"   -> {best['actual_compression']:.2f}x compression")
         else:
-            print("  ⚠ No successful proposals")
+            print("  [WARN] No successful proposals")
 
     # 保存完整结果
     import json
@@ -121,7 +121,7 @@ def main():
     print("[OK] Lottery Ticket Proposal Complete!")
     print(f"{'='*70}\n")
 
-    print("📁 Generated files:")
+    print(" Generated files:")
     print("  - results/proposals_compression_2x.json")
     print("  - results/proposals_compression_4x.json")
     print("  - results/proposals_compression_8x.json")

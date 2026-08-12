@@ -95,42 +95,42 @@ def prune_and_recover(
 
 def main():
     print("=" * 70)
-    print("剪枝 + 重建恢复完整实验 (步骤 C.2)")
+    print(" +  ( C.2)")
     print("=" * 70)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 加载数据
-    print("\n加载数据...")
+    print("\n...")
     train_loader, test_loader = get_mnist_loaders(batch_size=128, num_workers=0)
 
     # 加载训练好的模型
-    print("加载训练好的模型...")
+    print("...")
     model = create_mnist_baseline()
     checkpoint = torch.load('./checkpoints/mnist_dense_baseline.pth', map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
 
     # 评估原始模型
-    print("评估原始模型...")
+    print("...")
     original_acc = evaluate_model(model, test_loader, device)
     original_params = sum(p.numel() for p in model.parameters())
 
-    print(f"  原始准确率: {original_acc:.2f}%")
-    print(f"  原始参数量: {original_params:,}")
+    print(f"  : {original_acc:.2f}%")
+    print(f"  : {original_params:,}")
 
     # 测试不同剪枝比例
     prune_ratios = [0.3, 0.5, 0.7, 0.9]
     recovery_epochs = 10
 
     print("\n" + "=" * 70)
-    print(f"测试不同剪枝比例 (恢复训练 {recovery_epochs} 轮)")
+    print(f" ( {recovery_epochs} )")
     print("=" * 70)
 
     results = []
 
     for prune_ratio in prune_ratios:
-        print(f"\n剪枝比例: {prune_ratio:.0%}")
+        print(f"\n: {prune_ratio:.0%}")
         print("-" * 70)
 
         result = prune_and_recover(
@@ -145,11 +145,11 @@ def main():
         compression_ratio = original_params / result['params']
         recovery_gain = result['recovered_acc'] - result['pruned_acc']
 
-        print(f"  剪枝后参数量: {result['params']:,}")
-        print(f"  压缩率: {compression_ratio:.2f}x")
-        print(f"  剪枝后准确率 (无恢复): {result['pruned_acc']:.2f}%")
-        print(f"  恢复后准确率: {result['recovered_acc']:.2f}%")
-        print(f"  恢复提升: {recovery_gain:.2f}%")
+        print(f"  : {result['params']:,}")
+        print(f"  : {compression_ratio:.2f}x")
+        print(f"   (): {result['pruned_acc']:.2f}%")
+        print(f"  : {result['recovered_acc']:.2f}%")
+        print(f"  : {recovery_gain:.2f}%")
 
         results.append({
             'prune_ratio': prune_ratio,
@@ -162,12 +162,12 @@ def main():
 
     # 对比表格
     print("\n" + "=" * 70)
-    print("实验汇总")
+    print("")
     print("=" * 70)
 
-    print(f"\n{'剪枝比例':<10} {'参数量':<15} {'压缩率':<10} {'剪枝后':<10} {'恢复后':<10} {'恢复提升':<10}")
+    print(f"\n{'':<10} {'':<15} {'':<10} {'':<10} {'':<10} {'':<10}")
     print("-" * 70)
-    print(f"{'原始':<10} {original_params:<15,} {'1.00x':<10} {original_acc:<10.2f}% {'-':<10} {'-':<10}")
+    print(f"{'':<10} {original_params:<15,} {'1.00x':<10} {original_acc:<10.2f}% {'-':<10} {'-':<10}")
 
     for r in results:
         print(f"{r['prune_ratio']:<10.0%} {r['params']:<15,} {r['compression_ratio']:<10.2f}x "
@@ -175,33 +175,33 @@ def main():
 
     # 关键发现
     print("\n" + "=" * 70)
-    print("关键发现")
+    print("")
     print("=" * 70)
 
-    print("\n1. 恢复效果对比:")
+    print("\n1. :")
     for r in results:
         status = "优秀" if r['recovered_acc'] >= 98.0 else "良好" if r['recovered_acc'] >= 95.0 else "一般"
-        print(f"   {r['prune_ratio']:.0%} 剪枝: {r['pruned_acc']:.2f}% → {r['recovered_acc']:.2f}% "
+        print(f"   {r['prune_ratio']:.0%} : {r['pruned_acc']:.2f}% -> {r['recovered_acc']:.2f}% "
               f"(+{r['recovery_gain']:.2f}%) [{status}]")
 
-    print("\n2. Level 1 重建恢复的价值:")
-    print(f"   - 30% 剪枝: 恢复提升 {results[0]['recovery_gain']:.2f}%")
-    print(f"   - 50% 剪枝: 恢复提升 {results[1]['recovery_gain']:.2f}%")
-    print(f"   - 70% 剪枝: 恢复提升 {results[2]['recovery_gain']:.2f}%")
-    print(f"   - 90% 剪枝: 恢复提升 {results[3]['recovery_gain']:.2f}%")
+    print("\n2. Level 1 :")
+    print(f"   - 30% :  {results[0]['recovery_gain']:.2f}%")
+    print(f"   - 50% :  {results[1]['recovery_gain']:.2f}%")
+    print(f"   - 70% :  {results[2]['recovery_gain']:.2f}%")
+    print(f"   - 90% :  {results[3]['recovery_gain']:.2f}%")
 
-    print("\n3. 压缩与性能权衡:")
+    print("\n3. :")
     best_tradeoff = max(results, key=lambda x: x['recovered_acc'] - (100 - x['recovered_acc']))
-    print(f"   最佳权衡点: {best_tradeoff['prune_ratio']:.0%} 剪枝")
-    print(f"   - 准确率: {best_tradeoff['recovered_acc']:.2f}%")
-    print(f"   - 压缩率: {best_tradeoff['compression_ratio']:.2f}x")
-    print(f"   - 性能损失: {original_acc - best_tradeoff['recovered_acc']:.2f}%")
+    print(f"   : {best_tradeoff['prune_ratio']:.0%} ")
+    print(f"   - : {best_tradeoff['recovered_acc']:.2f}%")
+    print(f"   - : {best_tradeoff['compression_ratio']:.2f}x")
+    print(f"   - : {original_acc - best_tradeoff['recovered_acc']:.2f}%")
 
-    print("\n4. 与 One-shot Pruning 对比:")
-    print(f"   50% 剪枝:")
-    print(f"   - One-shot: 67.87% (损失 30.56%)")
-    print(f"   - Level 1 恢复: {results[1]['recovered_acc']:.2f}% (损失 {original_acc - results[1]['recovered_acc']:.2f}%)")
-    print(f"   - 恢复策略使性能提升 {results[1]['recovery_gain']:.2f}%!")
+    print("\n4.  One-shot Pruning :")
+    print(f"   50% :")
+    print(f"   - One-shot: 67.87% ( 30.56%)")
+    print(f"   - Level 1 : {results[1]['recovered_acc']:.2f}% ( {original_acc - results[1]['recovered_acc']:.2f}%)")
+    print(f"   -  {results[1]['recovery_gain']:.2f}%!")
 
     # 保存结果
     import json
@@ -224,8 +224,8 @@ def main():
             }
         }, f, indent=2)
 
-    print(f"\n结果已保存至: {result_path}")
-    print("\n[SUCCESS] 步骤 C.2 完成! Level 1 重建恢复实验成功!")
+    print(f"\n: {result_path}")
+    print("\n[SUCCESS]  C.2 ! Level 1 !")
 
 
 if __name__ == '__main__':

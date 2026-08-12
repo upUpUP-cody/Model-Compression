@@ -451,7 +451,7 @@ def compute_layer_importance(
 if __name__ == '__main__':
     # 测试剪枝功能
     print("=" * 70)
-    print("测试结构化剪枝")
+    print("")
     print("=" * 70)
 
     # 创建简单的 MLP
@@ -475,34 +475,34 @@ if __name__ == '__main__':
 
     # 创建模型
     model = SimpleMLP()
-    print(f"\n原始模型参数量: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"\n: {sum(p.numel() for p in model.parameters()):,}")
 
     # 创建剪枝器
     pruner = StructuredPruning(model)
 
     # 测试按比例剪枝
-    print("\n测试剪枝 features.0 层 (50% 剪枝)")
+    print("\n features.0  (50% )")
     keep_indices = pruner.prune_mlp_by_ratio('features.0', prune_ratio=0.5)
-    print(f"保留神经元数: {len(keep_indices)} / 512")
+    print(f": {len(keep_indices)} / 512")
 
     # 剪枝连接层
     pruner.prune_connected_layers('features.0', 'features.2', keep_indices)
 
     # 打印剪枝后信息
     info = pruner.get_model_info()
-    print(f"\n剪枝后模型信息:")
-    print(f"  参数量: {info['total_params']:,}")
-    print(f"  模型大小: {info['model_size_mb']:.2f} MB")
-    print(f"  稀疏度: {info['sparsity']:.2%}")
+    print(f"\n:")
+    print(f"  : {info['total_params']:,}")
+    print(f"  : {info['model_size_mb']:.2f} MB")
+    print(f"  : {info['sparsity']:.2%}")
 
     # 测试前向传播
     dummy_input = torch.randn(4, 784)
     output = model(dummy_input)
-    print(f"\n前向传播测试:")
-    print(f"  输入形状: {dummy_input.shape}")
-    print(f"  输出形状: {output.shape}")
+    print(f"\n:")
+    print(f"  : {dummy_input.shape}")
+    print(f"  : {output.shape}")
 
-    print("\n[SUCCESS] 剪枝功能测试通过!")
+    print("\n[SUCCESS] !")
 
 
 # 为了向后兼容，提供 StructuredPruner 别名

@@ -36,30 +36,30 @@ def evaluate_model(model, test_loader, device='cpu'):
 
 def main():
     print("=" * 70)
-    print("敏感度分析实验 - 步骤 A.3")
+    print(" -  A.3")
     print("=" * 70)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 加载数据
-    print("\n加载数据...")
+    print("\n...")
     train_loader, test_loader = get_mnist_loaders(batch_size=128, num_workers=0)
 
     # 加载训练好的模型
-    print("\n加载训练好的模型...")
+    print("\n...")
     model = create_mnist_baseline()
     checkpoint = torch.load('./checkpoints/mnist_dense_baseline.pth', map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
 
     # 评估原始模型
-    print("\n评估原始模型...")
+    print("\n...")
     original_acc = evaluate_model(model, test_loader, device)
-    print(f"  原始准确率: {original_acc:.2f}%")
+    print(f"  : {original_acc:.2f}%")
 
     # 比较不同敏感度方法
     print("\n" + "=" * 70)
-    print("比较不同敏感度评估方法")
+    print("")
     print("=" * 70)
 
     analyzer = SensitivityAnalyzer(model, device)
@@ -68,7 +68,7 @@ def main():
     all_results = {}
 
     for method in methods:
-        print(f"\n[{method.upper()}] 计算敏感度...")
+        print(f"\n[{method.upper()}] ...")
         scores = analyzer.compute_layer_sensitivity(
             train_loader,
             method=method,
@@ -77,7 +77,7 @@ def main():
         all_results[method] = scores
 
         # 只显示 Linear 层
-        print(f"  层级敏感度分数:")
+        print(f"  :")
         linear_layers = ['features.0', 'features.4', 'features.8', 'classifier']
         for layer in linear_layers:
             layer_key = layer if method == 'magnitude' else layer
@@ -88,7 +88,7 @@ def main():
 
     # 按敏感度排序
     print("\n" + "=" * 70)
-    print("层级敏感度排名 (从最敏感到最不敏感)")
+    print(" ()")
     print("=" * 70)
 
     for method in methods:
@@ -109,13 +109,13 @@ def main():
 
     # 基于敏感度的剪枝策略对比
     print("\n" + "=" * 70)
-    print("基于不同敏感度方法的剪枝对比 (50% 剪枝)")
+    print(" (50% )")
     print("=" * 70)
 
     prune_ratio = 0.5
 
     for method in ['magnitude', 'wanda']:
-        print(f"\n[{method.upper()}] 方法:")
+        print(f"\n[{method.upper()}] :")
         print("-" * 70)
 
         # 深拷贝模型
@@ -140,7 +140,7 @@ def main():
                 )
 
             if importance is None:
-                print(f"  [WARNING] 无法获取 {layer_name} 的重要性分数")
+                print(f"  [WARNING]  {layer_name} ")
                 continue
 
             # 按比例剪枝
@@ -151,35 +151,35 @@ def main():
 
             # 剪枝
             pruner.prune_linear_block(layer_name, keep_indices, next_layer_name)
-            print(f"  {layer_name}: 保留 {len(keep_indices)}/{num_neurons} 个神经元")
+            print(f"  {layer_name}:  {len(keep_indices)}/{num_neurons} ")
 
         # 评估剪枝后模型
         info = pruner.get_model_info()
         pruned_acc = evaluate_model(pruned_model, test_loader, device)
 
-        print(f"\n  剪枝后参数量: {info['total_params']:,}")
-        print(f"  剪枝后准确率: {pruned_acc:.2f}%")
-        print(f"  准确率下降: {original_acc - pruned_acc:.2f}%")
+        print(f"\n  : {info['total_params']:,}")
+        print(f"  : {pruned_acc:.2f}%")
+        print(f"  : {original_acc - pruned_acc:.2f}%")
 
     # 关键发现
     print("\n" + "=" * 70)
-    print("关键发现")
+    print("")
     print("=" * 70)
 
-    print("\n1. 敏感度方法对比:")
-    print("   - Magnitude (权重幅度): 最快，仅需读取权重")
-    print("   - Wanda (权重×激活): 中等速度，需要前向传播")
-    print("   - Gradient (梯度): 较慢，需要反向传播")
+    print("\n1. :")
+    print("   - Magnitude (): ")
+    print("   - Wanda (): ")
+    print("   - Gradient (): ")
 
-    print("\n2. 层级敏感度观察:")
-    print("   - 分类器层 (classifier) 通常最敏感")
-    print("   - 深层特征层敏感度高于浅层")
-    print("   - 可以指导「跳过高敏感度层」的剪枝策略")
+    print("\n2. :")
+    print("   -  (classifier) ")
+    print("   - ")
+    print("   - ")
 
-    print("\n3. 剪枝策略建议:")
-    print("   - 优先剪枝低敏感度层")
-    print("   - 保留分类器和最后几层的神经元")
-    print("   - Wanda 方法考虑了激活值，理论上更准确")
+    print("\n3. :")
+    print("   - ")
+    print("   - ")
+    print("   - Wanda ")
 
     # 保存结果
     import json
@@ -203,8 +203,8 @@ def main():
             }
         }, f, indent=2)
 
-    print(f"\n结果已保存至: {result_path}")
-    print("\n[SUCCESS] 步骤 A.3 完成! 敏感度分析实验成功!")
+    print(f"\n: {result_path}")
+    print("\n[SUCCESS]  A.3 ! !")
 
 
 if __name__ == '__main__':

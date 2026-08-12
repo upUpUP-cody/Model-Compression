@@ -34,41 +34,41 @@ def evaluate_model(model, test_loader, device='cpu'):
 
 def main():
     print("=" * 70)
-    print("结构化剪枝实验 - One-shot Pruning")
+    print(" - One-shot Pruning")
     print("=" * 70)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # 加载数据
-    print("\n加载数据...")
+    print("\n...")
     _, test_loader = get_mnist_loaders(batch_size=128, num_workers=0)
 
     # 加载训练好的模型
-    print("\n加载训练好的模型...")
+    print("\n...")
     model = create_mnist_baseline()
     checkpoint = torch.load('./checkpoints/mnist_dense_baseline.pth', map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
 
     # 评估原始模型
-    print("\n评估原始模型...")
+    print("\n...")
     original_acc = evaluate_model(model, test_loader, device)
     original_params = sum(p.numel() for p in model.parameters())
 
-    print(f"  准确率: {original_acc:.2f}%")
-    print(f"  参数量: {original_params:,}")
+    print(f"  : {original_acc:.2f}%")
+    print(f"  : {original_params:,}")
 
     # 测试不同剪枝比例
     prune_ratios = [0.3, 0.5, 0.7, 0.9]
 
     print("\n" + "=" * 70)
-    print("One-shot Pruning 测试")
+    print("One-shot Pruning ")
     print("=" * 70)
 
     results = []
 
     for prune_ratio in prune_ratios:
-        print(f"\n剪枝比例: {prune_ratio:.1%}")
+        print(f"\n: {prune_ratio:.1%}")
         print("-" * 70)
 
         # 深拷贝模型
@@ -106,10 +106,10 @@ def main():
                     next_layer_name
                 )
 
-                print(f"  {layer_name}: 保留 {len(keep_indices)} 个神经元")
+                print(f"  {layer_name}:  {len(keep_indices)} ")
 
             except Exception as e:
-                print(f"  [WARNING] 剪枝 {layer_name} 失败: {e}")
+                print(f"  [WARNING]  {layer_name} : {e}")
 
         # 获取剪枝后模型信息
         info = pruner.get_model_info()
@@ -121,10 +121,10 @@ def main():
         compression_ratio = original_params / info['total_params']
         acc_drop = original_acc - pruned_acc
 
-        print(f"\n  剪枝后参数量: {info['total_params']:,}")
-        print(f"  压缩率: {compression_ratio:.2f}x")
-        print(f"  剪枝后准确率: {pruned_acc:.2f}%")
-        print(f"  准确率下降: {acc_drop:.2f}%")
+        print(f"\n  : {info['total_params']:,}")
+        print(f"  : {compression_ratio:.2f}x")
+        print(f"  : {pruned_acc:.2f}%")
+        print(f"  : {acc_drop:.2f}%")
 
         results.append({
             'prune_ratio': prune_ratio,
@@ -136,24 +136,24 @@ def main():
 
     # 打印汇总结果
     print("\n" + "=" * 70)
-    print("实验汇总")
+    print("")
     print("=" * 70)
 
-    print(f"\n{'剪枝比例':<10} {'参数量':<15} {'压缩率':<10} {'准确率':<10} {'下降':<10}")
+    print(f"\n{'':<10} {'':<15} {'':<10} {'':<10} {'':<10}")
     print("-" * 70)
-    print(f"{'原始':<10} {original_params:<15,} {'1.00x':<10} {original_acc:<10.2f}% {'0.00%':<10}")
+    print(f"{'':<10} {original_params:<15,} {'1.00x':<10} {original_acc:<10.2f}% {'0.00%':<10}")
 
     for r in results:
         print(f"{r['prune_ratio']:<10.0%} {r['params']:<15,} {r['compression_ratio']:<10.2f}x "
               f"{r['accuracy']:<10.2f}% {r['acc_drop']:<10.2f}%")
 
-    print("\n关键发现:")
-    print(f"  - 30% 剪枝后准确率: {results[0]['accuracy']:.2f}%")
-    print(f"  - 50% 剪枝后准确率: {results[1]['accuracy']:.2f}%")
-    print(f"  - 70% 剪枝后准确率: {results[2]['accuracy']:.2f}%")
-    print(f"  - 90% 剪枝后准确率: {results[3]['accuracy']:.2f}%")
-    print(f"\n  注意: 这是 one-shot pruning 无恢复的结果")
-    print(f"       后续步骤将实现恢复策略来提升剪枝后性能")
+    print("\n:")
+    print(f"  - 30% : {results[0]['accuracy']:.2f}%")
+    print(f"  - 50% : {results[1]['accuracy']:.2f}%")
+    print(f"  - 70% : {results[2]['accuracy']:.2f}%")
+    print(f"  - 90% : {results[3]['accuracy']:.2f}%")
+    print(f"\n  :  one-shot pruning ")
+    print(f"       ")
 
     # 保存结果
     import json
@@ -167,7 +167,7 @@ def main():
             'pruned_results': results
         }, f, indent=2)
 
-    print(f"\n结果已保存至: {result_path}")
+    print(f"\n: {result_path}")
 
 
 if __name__ == '__main__':

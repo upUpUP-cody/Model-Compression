@@ -246,7 +246,7 @@ class FrontierProfiler:
         with open(save_path, 'w') as f:
             json.dump(results, f, indent=2)
 
-        print(f"✓ Results saved to {save_path}")
+        print(f"[OK] Results saved to {save_path}")
 
     def plot_frontier(self, results: Dict, save_path: Optional[str] = None):
         """
@@ -293,7 +293,7 @@ class FrontierProfiler:
 
         if save_path:
             plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"✓ Plot saved to {save_path}")
+            print(f"[OK] Plot saved to {save_path}")
         else:
             plt.show()
 

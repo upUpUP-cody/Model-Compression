@@ -194,24 +194,24 @@ def get_dataset_info(dataset_name: str) -> dict:
 
 if __name__ == '__main__':
     # 测试数据加载器
-    print("测试 MNIST 数据加载器...")
+    print(" MNIST ...")
     train_loader, test_loader = get_mnist_loaders(batch_size=64)
 
     # 获取一个批次
     images, labels = next(iter(train_loader))
-    print(f"[SUCCESS] MNIST 加载成功:")
-    print(f"   批次形状: {images.shape}")
-    print(f"   标签形状: {labels.shape}")
-    print(f"   训练批次数: {len(train_loader)}")
-    print(f"   测试批次数: {len(test_loader)}")
+    print(f"[SUCCESS] MNIST :")
+    print(f"   : {images.shape}")
+    print(f"   : {labels.shape}")
+    print(f"   : {len(train_loader)}")
+    print(f"   : {len(test_loader)}")
 
     # 打印数据集信息
-    print("\n数据集信息:")
+    print("\n:")
     for dataset in ['mnist', 'cifar10', 'squad']:
         info = get_dataset_info(dataset)
         if info:
             print(f"\n{info['name']}:")
-            print(f"  类别数: {info['num_classes']}")
-            print(f"  输入形状: {info['input_shape']}")
-            print(f"  训练集大小: {info['train_size']}")
-            print(f"  硬件需求: {info['hardware']}")
+            print(f"  : {info['num_classes']}")
+            print(f"  : {info['input_shape']}")
+            print(f"  : {info['train_size']}")
+            print(f"  : {info['hardware']}")

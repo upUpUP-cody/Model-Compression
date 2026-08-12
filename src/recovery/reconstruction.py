@@ -136,7 +136,7 @@ class ReconstructionRecovery:
         }
 
         if verbose:
-            print(f"\n开始重建恢复训练 (Level 1) - {epochs} 轮...")
+            print(f"\n (Level 1) - {epochs} ...")
 
         best_acc = 0.0
 
@@ -164,7 +164,7 @@ class ReconstructionRecovery:
                 best_acc = test_acc
 
         if verbose:
-            print(f"恢复完成! 最佳测试准确率: {best_acc:.2f}%")
+            print(f"! : {best_acc:.2f}%")
 
         history['best_test_acc'] = best_acc
 
@@ -219,7 +219,7 @@ if __name__ == '__main__':
     sys.path.insert(0, str(project_root))
 
     print("=" * 70)
-    print("测试重建恢复策略 (Level 1)")
+    print(" (Level 1)")
     print("=" * 70)
 
     from src.models.dense_baseline import create_mnist_baseline
@@ -228,26 +228,26 @@ if __name__ == '__main__':
     import copy
 
     # 加载数据
-    print("\n加载数据...")
+    print("\n...")
     train_loader, test_loader = get_mnist_loaders(batch_size=128, num_workers=0)
 
     # 创建模型
-    print("\n创建模型...")
+    print("\n...")
     model = create_mnist_baseline()
 
     # 加载训练好的权重
-    print("加载预训练权重...")
+    print("...")
     checkpoint = torch.load('./checkpoints/mnist_dense_baseline.pth', map_location='cpu')
     model.load_state_dict(checkpoint['model_state_dict'])
 
     # 评估原始模型
-    print("\n评估原始模型...")
+    print("\n...")
     recoverer = ReconstructionRecovery(model, device='cpu')
     _, original_acc = recoverer.evaluate(test_loader)
-    print(f"  原始准确率: {original_acc:.2f}%")
+    print(f"  : {original_acc:.2f}%")
 
     # 剪枝模型 (50%)
-    print("\n剪枝模型 (50%)...")
+    print("\n (50%)...")
     pruned_model = copy.deepcopy(model)
     pruner = StructuredPruning(pruned_model)
 
@@ -264,11 +264,11 @@ if __name__ == '__main__':
         pruner.prune_linear_block(layer_name, keep_indices, next_layer_name)
 
     # 评估剪枝后模型
-    print("\n评估剪枝后模型 (无恢复)...")
+    print("\n ()...")
     recoverer_pruned = ReconstructionRecovery(pruned_model, device='cpu')
     _, pruned_acc = recoverer_pruned.evaluate(test_loader)
-    print(f"  剪枝后准确率: {pruned_acc:.2f}%")
-    print(f"  准确率下降: {original_acc - pruned_acc:.2f}%")
+    print(f"  : {pruned_acc:.2f}%")
+    print(f"  : {original_acc - pruned_acc:.2f}%")
 
     # 恢复训练
     print("\n" + "=" * 70)
@@ -281,10 +281,10 @@ if __name__ == '__main__':
 
     # 最终结果
     print("\n" + "=" * 70)
-    print("最终结果:")
-    print(f"  原始模型准确率: {original_acc:.2f}%")
-    print(f"  剪枝后准确率 (无恢复): {pruned_acc:.2f}%")
-    print(f"  恢复后准确率: {history['best_test_acc']:.2f}%")
-    print(f"  恢复提升: {history['best_test_acc'] - pruned_acc:.2f}%")
+    print(":")
+    print(f"  : {original_acc:.2f}%")
+    print(f"   (): {pruned_acc:.2f}%")
+    print(f"  : {history['best_test_acc']:.2f}%")
+    print(f"  : {history['best_test_acc'] - pruned_acc:.2f}%")
 
-    print("\n[SUCCESS] 重建恢复测试通过!")
+    print("\n[SUCCESS] !")
