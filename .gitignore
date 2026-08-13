@@ -175,6 +175,13 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Project-generated experiment artifacts
+results/
+gpu_send/
+checkpoints/
+*.pth
+.claude/worktrees/
+
 # Project-specific
 *.pdf
 

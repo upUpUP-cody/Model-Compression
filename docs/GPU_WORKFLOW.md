@@ -1,66 +1,57 @@
-# GPU Workflow
+# GPU 续跑工作流
 
-This workflow prepares and runs the MNIST P1.2 comparison on a CUDA host. CUDA smoke and study results are pending until they are run on the target GPU environment.
+本工作流面向已生成 `gpu_send/gpu_send/` P1.2 回传证据的同一台 RTX 4090 主机。该证据是 seed=42 的已完成单次参考结果，不是待补跑任务。
 
-## 1. Prepare the host
+## GitHub 增量交付
 
-Use a supported NVIDIA driver and verify that the GPU is visible:
+GPU 主机只应拉取已批准的源码 commit：
 
-```bash
+```bat
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+git rev-parse HEAD
+git status --short
+```
+
+- 将输出 SHA 与交付记录中的批准 SHA 比对。
+- `gpu_send/gpu_send/` 是只读回传证据：不得覆盖、移动、修改或提交。
+- 不得提交或回推 `results/`、`data/`、`venv/`、缓存、日志或实验生成 checkpoint。
+- 只有本次 commit 修改了 P1.2 行为、协议、配置语义或基线 checkpoint 输入时，才可用新的输出根运行新的 P1.2 study；否则保留既有 evidence，不重跑它。
+
+## 环境核验
+
+保留已经验证的 CUDA 环境；仅在驱动、PyTorch 或 GPU 分配变化时才选择新的兼容 wheel，并记录完整安装命令和实际版本。
+
+```bat
 nvidia-smi
-python -m venv venv
-venv\Scripts\activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-```
-
-Choose the PyTorch wheel index matching the installed driver and the PyTorch compatibility table. The CUDA toolkit is not normally required when using the official wheel, but the NVIDIA driver is required.
-
-## 2. Run the environment check
-
-```bash
+python -c "import torch, torchvision, torchaudio; print('torch=', torch.__version__); print('torchvision=', torchvision.__version__); print('torchaudio=', torchaudio.__version__); print('torch_cuda=', torch.version.cuda); print('cuda_available=', torch.cuda.is_available())"
 python scripts/check_gpu.py --device cuda:0 --precision fp16
+python scripts/check_gpu.py --device cuda:0 --precision bf16
 ```
 
-The output must report the selected GPU, CUDA and cuDNN metadata, deterministic policy, AMP forward/backward, and peak allocated memory. A CUDA-unavailable error is a failure to resolve before proceeding; it is never permission to run the GPU profile on CPU.
+CUDA、AMP forward/backward 或非零显存分配失败时停止。若 BF16 不支持，回传 capability 与错误输出；不得临时编辑 BF16 formal YAML 改成 FP16，必须先获得批准的新版本化 FP16 formal config。
 
-## 3. Run the GPU smoke study
+## 新 P1.2 study（仅在输入或协议变更时）
 
-```bash
+先执行仅 train/validation 的 smoke study，再使用命令实际打印的新目录执行一次 frozen report：
+
+```bat
 python experiments/run_p12_comparison.py study --config configs/mnist_p12_gpu_smoke.yaml --checkpoint checkpoints/mnist_dense_baseline.pth
+python experiments/run_p12_comparison.py report-test --config configs/mnist_p12_gpu_smoke.yaml --checkpoint checkpoints/mnist_dense_baseline.pth --study-dir <SMOKE_STUDY_DIR>
 ```
 
-Expected output root: `results/p12_comparison_gpu_smoke/`. Confirm that the generated `manifest.json` has `selection_frozen: true`, exactly six comparison records, a CUDA runtime block, checkpoint hashes, and no `final_test_report.json`.
+Smoke 通过后，针对新的 formal 目录执行同一流程：
 
-## 4. Run the frozen smoke test report
-
-Substitute the study directory printed by the smoke command:
-
-```bash
-python experiments/run_p12_comparison.py report-test --config configs/mnist_p12_gpu_smoke.yaml --checkpoint checkpoints/mnist_dense_baseline.pth --study-dir results/p12_comparison_gpu_smoke/p12_comparison_mnist_p12_gpu_smoke_HASH
-```
-
-This is the first point at which the official test dataset is loaded. Confirm the final report has six methods and references only frozen checkpoints.
-
-## 5. Run the formal GPU study
-
-Only after the smoke study and frozen report pass:
-
-```bash
+```bat
 python experiments/run_p12_comparison.py study --config configs/mnist_p12_gpu_study.yaml --checkpoint checkpoints/mnist_dense_baseline.pth
+python experiments/run_p12_comparison.py report-test --config configs/mnist_p12_gpu_study.yaml --checkpoint checkpoints/mnist_dense_baseline.pth --study-dir <FORMAL_STUDY_DIR>
 ```
 
-Expected output root: `results/p12_comparison_gpu/`. This is a separate result namespace and must not replace any CPU artifacts. The study can take several minutes depending on GPU speed, data access, and recovery epochs.
+`report-test` 只允许用于新的、未生成 final report 的 frozen study。它会在加载 test 数据前核验：P1.2 protocol、六种固定方法、config/source checkpoint/Git SHA、split metadata、CUDA identity（GPU profile）、study 内 checkpoint 与 SHA-256。
 
-After the formal study freezes successfully, run `report-test` with the same formal GPU config and its generated study directory.
+预计超过五分钟的新实验启动后，必须立即记录实验名称、基于首轮实测的时长、命令和实际输出目录。回传 evidence 时独立打包 manifest、resolved config、comparison JSON/CSV、summary、final report、六个 checkpoint 的 digest/安全位置和完整日志；不得推送至 GitHub。
 
-## Troubleshooting
+## 后续阶段
 
-- CUDA unavailable: reinstall a PyTorch wheel matching the NVIDIA driver and confirm `nvidia-smi` works in the same shell.
-- CUDA out of memory: reduce `dataset.batch_size`; retain `num_workers: 0` for the smoke profile.
-- Windows worker errors: use `num_workers: 0`, `persistent_workers: false`, and omit `prefetch_factor`.
-- bf16 unsupported: change `hardware.precision` to `fp16` and retain `mixed_precision: true`.
-- Reproducibility-oriented runs: use `deterministic: true`, `cudnn_benchmark: false`, and `tf32: false`.
-
-Do not commit `results/`, datasets, caches, or checkpoints. Preserve the returned study path and its `manifest.json` when reporting results from the GPU host.
+P1.2 seed=42 不构成统计结论。下一次代码交付应先实现多 seed、真实压缩率扫描及 mean/std/Pareto 聚合；CIFAR/ResNet、LoRA、自蒸馏和 Qwen/SQuAD 必须在相应源码、配置和测试实际交付后再启动，不得把现有 MNIST runner 当作这些实验的入口。

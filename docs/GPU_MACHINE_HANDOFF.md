@@ -1,14 +1,14 @@
-# GPU 机器接管执行手册
+# GPU 机器增量续跑手册
 
-本文档用于将 MNIST P1.2 GPU 实验交接给另一台 NVIDIA CUDA 机器的操作者。所有命令均需在仓库根目录执行。当前 CPU 主机没有产生任何真实 CUDA 结果，所有 GPU 证据必须由目标 GPU 主机实际生成。
+本文档用于在已生成 `gpu_send/gpu_send/` P1.2 回传证据的同一台 NVIDIA CUDA 主机上继续实验。该目录是已审核的 seed=42 参考 evidence，必须只读保存；不得覆盖、修改、移动或提交。所有命令均需在仓库根目录执行。新实验必须使用新的输出目录，且只有在 P1.2 行为、数据协议、checkpoint 输入或配置语义发生批准的版本化变更时才重跑 P1.2。
 
 ## 0. 执行顺序与硬性规则
 
 必须严格按以下顺序执行：
 
-1. 核验传输的仓库、checkpoint 和 NVIDIA 环境。
+1. 核验 GitHub 拉取的仓库、checkpoint 和 NVIDIA 环境。
 2. 运行 CUDA 与 AMP 自检。
-3. 运行仅使用 train/validation 的 GPU smoke study。
+3. 仅在本次已批准的版本化变更要求时，运行新的、仅使用 train/validation 的 GPU smoke study。
 4. 核验 smoke study 已冻结，再运行其冻结 test report。
 5. 运行正式 GPU study。
 6. 核验正式 study 已冻结，再运行其冻结 test report。
@@ -18,10 +18,10 @@
 
 - 不得在 CPU 上运行 GPU profile，也不得启用 CPU fallback。
 - 未经研究负责人批准，不得修改 GPU YAML、seed、方法列表、checkpoint 或输出目录。
-- 不得对未冻结、旧的或不同的 study 目录运行 `report-test`。
+- 不得对未冻结、旧的、已生成 final report 或不同的 study 目录运行 `report-test`。
 - `study` 只可使用 train 和 validation 数据做选择；仅当冻结校验通过后，`report-test` 才可加载官方 MNIST test 数据。
 - GPU 输出必须与已有 CPU 结果分离。
-- 不得提交 `results/`、`data/`、虚拟环境、缓存或 checkpoint。
+- 不得提交或推送 `results/`、`gpu_send/`、`data/`、虚拟环境、缓存或 checkpoint。
 - 每条命令打印出的 study 目录必须原样保存；不得猜测或复用旧实验目录。
 
 ### 交接身份信息
@@ -127,7 +127,7 @@ python scripts/check_gpu.py --device cuda:0 --precision fp16
 python scripts/check_gpu.py --device cuda:0 --precision bf16
 ```
 
-如果 BF16 不受支持，不得自行将正式配置改成 FP16。必须将 GPU capability 和错误输出回传给研究负责人；需要另行批准并版本化 FP16 formal config 后，才可得到可比较的正式结果。
+如果 BF16 不受支持，不得自行将正式配置改成 FP16。必须将 GPU capability 和错误输出回传给研究负责人；需要另行批准并提交版本化 FP16 formal config 后，才可得到可比较的正式结果。
 
 ## 4. GPU Smoke Study
 

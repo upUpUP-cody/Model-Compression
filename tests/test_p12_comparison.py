@@ -9,7 +9,10 @@ from torch.utils.data import DataLoader, TensorDataset
 from experiments.run_p12_comparison import run_test_report, verify_frozen_study
 from src.experiments.p12_comparison import METHOD_NAMES, results_to_records, run_comparison
 from src.models.dense_baseline import MLP
-from src.utils.experiment_artifacts import RunArtifacts, config_hash, file_sha256
+from src.utils.experiment_artifacts import RunArtifacts, config_hash, file_sha256, git_sha
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def make_model():
@@ -36,6 +39,7 @@ def make_config():
     return {
         "seed": 4,
         "hardware": {"device": "cpu"},
+        "dataset": {"split_seed": 4},
         "controller": {
             "max_accuracy_drop_points": 100.0,
             "max_failures": 3,
@@ -61,6 +65,36 @@ def make_config():
             "recovery_learning_rate": 0.001,
         },
     }
+
+
+def make_frozen_study(tmp_path, config):
+    checkpoint_source = tmp_path / "source.pth"
+    torch.save({"model_state_dict": make_model().state_dict()}, checkpoint_source)
+    study = tmp_path / "study"
+    study.mkdir()
+    records = []
+    for method in METHOD_NAMES:
+        selected = study / f"{method}.pth"
+        torch.save({"model_state_dict": make_model().state_dict()}, selected)
+        records.append({
+            "method": method,
+            "checkpoint": str(selected),
+            "checkpoint_sha256": file_sha256(selected),
+            "model_hidden_dims": [4, 3],
+        })
+    manifest = {
+        "protocol": "p12_validation_only_study",
+        "selection_frozen": True,
+        "config_hash": config_hash(config),
+        "git_sha": git_sha(PROJECT_ROOT),
+        "checkpoint_source_sha256": file_sha256(checkpoint_source),
+        "split": {"split_seed": 4, "train_size": 1, "validation_size": 1, "split_hash": "split"},
+        "runtime": {"device": {"type": "cpu", "cuda_available": False}},
+        "cuda_policy": {"device": "cpu"},
+        "records": records,
+    }
+    (study / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    return checkpoint_source, study, manifest
 
 
 def test_all_comparison_arms_are_validation_only_and_isolate_source_model():
@@ -90,37 +124,46 @@ def test_comparison_artifacts_write_json_and_flat_csv(tmp_path):
     assert "oneshot_wanda" in comparison_csv.read_text()
 
 
-def test_report_gate_rejects_bad_freeze_inputs_before_loading_test(monkeypatch, tmp_path):
-    checkpoint_source = tmp_path / "source.pth"
-    torch.save({"model_state_dict": make_model().state_dict()}, checkpoint_source)
-    selected = tmp_path / "selected.pth"
-    torch.save({"model_state_dict": make_model().state_dict()}, selected)
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda manifest, study: manifest.update(protocol="wrong"), "protocol"),
+        (lambda manifest, study: manifest.update(git_sha="wrong"), "git SHA"),
+        (lambda manifest, study: manifest["records"].pop(), "exactly six"),
+        (lambda manifest, study: manifest["records"].__setitem__(0, {**manifest["records"][0], "method": "unknown"}), "method set"),
+        (lambda manifest, study: manifest["split"].update(split_hash=""), "split hash"),
+        (lambda manifest, study: manifest["records"][0].update(checkpoint=str(study.parent / "outside.pth")), "inside the study"),
+    ],
+)
+def test_report_gate_rejects_invalid_manifest_before_loading_test(monkeypatch, tmp_path, mutation, message):
     config = make_config()
-    study = tmp_path / "study"
-    study.mkdir()
-    manifest = {
-        "selection_frozen": True,
-        "config_hash": config_hash(config),
-        "checkpoint_source_sha256": file_sha256(checkpoint_source),
-        "split": {"split_seed": 4, "train_size": 1, "validation_size": 1, "split_hash": "split"},
-        "records": [{
-            "method": "dense_baseline",
-            "checkpoint": str(selected),
-            "checkpoint_sha256": file_sha256(selected),
-            "model_hidden_dims": [4, 3],
-        }],
-    }
+    checkpoint_source, study, manifest = make_frozen_study(tmp_path, config)
+    mutation(manifest, study)
     (study / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    assert verify_frozen_study(study, config, checkpoint_source)["selection_frozen"] is True
-
-    manifest["selection_frozen"] = False
-    (study / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    with pytest.raises(ValueError, match="not frozen"):
-        verify_frozen_study(study, config, checkpoint_source)
-
     monkeypatch.setattr(
         "experiments.run_p12_comparison.get_mnist_loaders",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("test loader was accessed")),
     )
-    with pytest.raises(ValueError, match="not frozen"):
+
+    with pytest.raises(ValueError, match=message):
         run_test_report(study, config, checkpoint_source)
+
+
+def test_report_gate_rejects_preexisting_final_report_before_loading_test(monkeypatch, tmp_path):
+    config = make_config()
+    checkpoint_source, study, _ = make_frozen_study(tmp_path, config)
+    (study / "final_test_report.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        "experiments.run_p12_comparison.get_mnist_loaders",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("test loader was accessed")),
+    )
+
+    with pytest.raises(ValueError, match="already has a final test report"):
+        run_test_report(study, config, checkpoint_source)
+
+
+def test_verify_frozen_study_accepts_complete_manifest(tmp_path):
+    config = make_config()
+    checkpoint_source, study, _ = make_frozen_study(tmp_path, config)
+
+    assert verify_frozen_study(study, config, checkpoint_source)["selection_frozen"] is True

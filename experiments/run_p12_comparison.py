@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.autonomous_search import full_evaluate
-from src.experiments.p12_comparison import results_to_records, run_comparison
+from src.experiments.p12_comparison import METHOD_NAMES, results_to_records, run_comparison
 from src.models.dense_baseline import MLP
 from src.utils.data_loader import get_mnist_loaders, mnist_split_metadata
 from src.utils.device import configure_cuda, resolve_device
@@ -89,22 +89,63 @@ def run_study(config: Dict[str, Any], checkpoint_source: Path, command: str) -> 
 
 def verify_frozen_study(study_dir: Path, config: Dict[str, Any], checkpoint_source: Path) -> Dict[str, Any]:
     """Verify all freeze inputs before a caller is permitted to load test data."""
+    study_dir = study_dir.resolve()
     manifest_path = study_dir / "manifest.json"
-    if not manifest_path.exists():
+    if not manifest_path.is_file():
         raise ValueError("study manifest does not exist")
+    if (study_dir / "final_test_report.json").exists():
+        raise ValueError("study already has a final test report")
+
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("protocol") != "p12_validation_only_study":
+        raise ValueError("study protocol does not match P1.2 validation-only protocol")
     if manifest.get("selection_frozen") is not True:
         raise ValueError("study selection is not frozen")
     if manifest.get("config_hash") != config_hash(config):
         raise ValueError("study config hash does not match")
+    if manifest.get("git_sha") != git_sha(PROJECT_ROOT):
+        raise ValueError("study git SHA does not match")
     if manifest.get("checkpoint_source_sha256") != file_sha256(checkpoint_source):
         raise ValueError("study source checkpoint hash does not match")
+
+    split = manifest.get("split")
+    expected_split_seed = config["dataset"].get("split_seed", config["seed"])
+    if not isinstance(split, dict) or split.get("split_seed") != expected_split_seed:
+        raise ValueError("study split metadata does not match configured split seed")
+    if not isinstance(split.get("train_size"), int) or split["train_size"] <= 0:
+        raise ValueError("study split metadata has an invalid train size")
+    if not isinstance(split.get("validation_size"), int) or split["validation_size"] <= 0:
+        raise ValueError("study split metadata has an invalid validation size")
+    if not isinstance(split.get("split_hash"), str) or not split["split_hash"]:
+        raise ValueError("study split metadata has no split hash")
+
+    runtime = manifest.get("runtime")
+    device = runtime.get("device") if isinstance(runtime, dict) else None
+    cuda_policy = manifest.get("cuda_policy")
+    expected_device = resolve_device(config["hardware"]["device"])
+    if expected_device.type == "cuda":
+        if not isinstance(device, dict) or device.get("type") != "cuda" or not device.get("cuda_available"):
+            raise ValueError("study runtime is missing CUDA metadata")
+        if not isinstance(cuda_policy, dict) or cuda_policy.get("device") != str(expected_device):
+            raise ValueError("study CUDA policy does not match configured device")
+
     records = manifest.get("records")
-    if not isinstance(records, list) or not records:
-        raise ValueError("study contains no frozen result records")
+    if not isinstance(records, list) or len(records) != len(METHOD_NAMES):
+        raise ValueError("study must contain exactly six frozen result records")
+    methods = [record.get("method") for record in records if isinstance(record, dict)]
+    if len(methods) != len(METHOD_NAMES) or set(methods) != set(METHOD_NAMES):
+        raise ValueError("study frozen result methods do not match the P1.2 method set")
+
     for record in records:
-        checkpoint = Path(record["checkpoint"])
-        if not checkpoint.exists() or record.get("checkpoint_sha256") != file_sha256(checkpoint):
+        checkpoint_value = record.get("checkpoint")
+        if not isinstance(checkpoint_value, str):
+            raise ValueError("frozen selected checkpoint path is invalid")
+        checkpoint = Path(checkpoint_value).resolve()
+        try:
+            checkpoint.relative_to(study_dir)
+        except ValueError as error:
+            raise ValueError("frozen selected checkpoint must be inside the study directory") from error
+        if not checkpoint.is_file() or record.get("checkpoint_sha256") != file_sha256(checkpoint):
             raise ValueError("frozen selected checkpoint hash does not match")
     return manifest
 
@@ -149,7 +190,7 @@ def _hidden_dims(model: MLP) -> list[int]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run P1.2 CPU MNIST comparison protocol")
+    parser = argparse.ArgumentParser(description="Run P1.2 MNIST comparison protocol")
     parser.add_argument("mode", choices=("study", "report-test"))
     parser.add_argument("--config", default="configs/mnist_p12_cpu_study.yaml")
     parser.add_argument("--checkpoint", default="checkpoints/mnist_dense_baseline.pth")
