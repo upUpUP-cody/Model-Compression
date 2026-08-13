@@ -45,6 +45,12 @@ def validate_config(config: Dict[str, Any]) -> None:
         raise ValueError("dataset.batch_size must be positive")
     if config["search"]["max_iterations"] <= 0:
         raise ValueError("search.max_iterations must be positive")
+    if not isinstance(config["search"].get("candidates_per_round"), int) or config["search"]["candidates_per_round"] < 1:
+        raise ValueError("search.candidates_per_round must be positive")
+    if not isinstance(config["search"].get("recovery_top_k", 1), int) or config["search"].get("recovery_top_k", 1) < 1:
+        raise ValueError("search.recovery_top_k must be positive")
+    if not isinstance(config["search"].get("enable_two_layer_candidates", False), bool):
+        raise ValueError("search.enable_two_layer_candidates must be boolean")
     ratios = config["search"]["candidate_ratios"]
     if not isinstance(ratios, list) or not ratios or any(not 0.0 < float(ratio) < 1.0 for ratio in ratios):
         raise ValueError("search.candidate_ratios must contain values in (0.0, 1.0)")
@@ -106,21 +112,41 @@ class RunArtifacts:
     def save_history_csv(self, events: Iterable[Dict[str, Any]]) -> None:
         rows = []
         for event in events:
-            row = {
-                "iteration": event.get("iteration"),
-                "action": event.get("final_action", event.get("action")),
-                "reason": event.get("final_reason", event.get("reason")),
-                "fingerprint": event.get("fingerprint"),
-                "cheap_accuracy": event.get("cheap_critic", {}).get("accuracy"),
-                "cheap_loss": event.get("cheap_critic", {}).get("loss"),
-                "parameter_count": event.get("cheap_critic", {}).get("parameter_count"),
-                "validation_accuracy": event.get("validation", {}).get("accuracy"),
-            }
-            rows.append(row)
+            candidates = event.get("candidates")
+            if isinstance(candidates, list):
+                for candidate in candidates:
+                    rows.append(self._history_row(event, candidate))
+            else:
+                rows.append(self._history_row(event, event))
         with (self.run_dir / "history.csv").open("w", newline="", encoding="utf-8") as csv_file:
-            writer = csv.DictWriter(csv_file, fieldnames=list(rows[0].keys()) if rows else ["iteration"])
+            fieldnames = [
+                "iteration", "generation_order", "candidate_type", "audit_status", "action",
+                "reason", "fingerprint", "cheap_accuracy", "cheap_loss", "parameter_count",
+                "validation_accuracy", "shortlist_rank", "recovery_rank",
+            ]
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
+
+    @staticmethod
+    def _history_row(event: Dict[str, Any], candidate: Dict[str, Any]) -> Dict[str, Any]:
+        cheap_critic = candidate.get("cheap_critic", event.get("cheap_critic", {}))
+        validation = candidate.get("validation", event.get("validation", {}))
+        return {
+            "iteration": event.get("iteration"),
+            "generation_order": candidate.get("generation_order"),
+            "candidate_type": candidate.get("candidate_type"),
+            "audit_status": candidate.get("audit_status"),
+            "action": candidate.get("final_action", event.get("final_action", event.get("action"))),
+            "reason": candidate.get("final_reason", event.get("final_reason", event.get("reason"))),
+            "fingerprint": candidate.get("fingerprint", event.get("fingerprint")),
+            "cheap_accuracy": cheap_critic.get("accuracy"),
+            "cheap_loss": cheap_critic.get("loss"),
+            "parameter_count": candidate.get("actual_parameter_count", cheap_critic.get("parameter_count")),
+            "validation_accuracy": validation.get("accuracy"),
+            "shortlist_rank": candidate.get("shortlist_rank"),
+            "recovery_rank": candidate.get("recovery_rank"),
+        }
 
     def save_checkpoint(self, model: torch.nn.Module, name: str = "accepted_model.pth") -> Path:
         path = self.run_dir / name

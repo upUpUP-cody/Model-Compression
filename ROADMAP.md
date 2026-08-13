@@ -1,287 +1,37 @@
-# 项目实施路线图 - 快速参考
+# 项目路线图
 
-## 📋 总体进度追踪
+[PROJECT_PLAN.md](PROJECT_PLAN.md) 记录完整项目总计划、长期路线图和全局目标；[EXECUTION_PLAN.md](EXECUTION_PLAN.md) 定义当前 P0/P1/P2 的执行顺序、研究协议和阶段验收。当前实现是 CPU-first MNIST MLP MVP，不应将其视为论文复现结果。
 
-```
-[⬜️] 阶段 0: 环境搭建 (3-5天)
-[⬜️] 阶段 A: 基础组件 (7-10天)
-[⬜️] 阶段 B: 前沿分析 (5-7天)
-[⬜️] 阶段 C: 恢复策略 (7-10天)
-[⬜️] 阶段 D: 压缩控制器 (5-7天)
-[⬜️] 阶段 E: 端到端集成 (5-7天)
-[⬜️] 阶段 F: 实验验证 (7-10天)
-```
+## 当前阶段
 
----
+P0：加固搜索正确性和审计链路。
 
-## 🚀 快速启动指南
+- 让 Wanda 分数实际决定结构化剪枝保留索引。
+- 记录所有候选、统一 controller 生命周期，并实现可验证的 rollback 终止语义。
+- 让 Level 1 恢复返回最佳 validation 模型。
+- 实现真实参数量基础上的 Pareto frontier，迁移或弃用旧 frontier/proposal 并行逻辑。
 
-### Day 1-2: 立即可做
-```bash
-# 1. 创建项目结构
-mkdir -p src/{models,pruning,recovery,controller,evaluation,utils}
-mkdir -p configs experiments tests data checkpoints logs results
+## 下一里程碑
 
-# 2. 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+P1：建立可复现的 CPU MNIST 研究协议。
 
-# 3. 安装依赖
-pip install torch torchvision transformers numpy pandas matplotlib seaborn pytest wandb
+- 固定 train/validation split，封存 official test。
+- 补充配置、manifest、运行标识和完整候选/前沿产物。
+- 完成 smoke、单 seed 调试和至少三个 seed 的固定预算对照研究。
 
-# 4. 下载 MNIST 数据集
-python -c "from torchvision.datasets import MNIST; MNIST('./data', download=True)"
+## 后续边界
 
-# 5. 运行第一个 baseline
-# (需要先实现 src/models/dense_baseline.py)
-```
+P2：仅在 P0/P1 验收后进入 GPU 与架构扩展。
 
-### Week 1: 基础验证
-- **目标**: 在 MNIST 上训练一个 3 层 MLP 达到 >98% 准确率
-- **交付物**:
-  - `src/models/mlp.py`
-  - `experiments/train_mnist_baseline.py`
-  - 训练日志和模型检查点
+- 先支持 CIFAR-10 与小型 ResNet，并为 CNN 设计显式结构依赖。
+- 再加入 GPU 指标、LoRA 和 self-distillation。
+- 最后才规划 Qwen/SQuAD 及论文级实验。
 
-### Week 2-3: 核心功能
-- **目标**: 实现剪枝 + 简单恢复
-- **交付物**:
-  - `src/pruning/structured_pruning.py`
-  - `src/pruning/sensitivity.py`
-  - `src/recovery/reconstruction.py`
-  - 单元测试通过
+## 文档入口
 
-### Week 4: 端到端
-- **目标**: 完整的自主搜索循环可运行
-- **交付物**:
-  - `src/autonomous_search.py`
-  - MNIST 实验结果
-  - 稀疏度-准确率曲线图
-
----
-
-## 📊 实验检查清单
-
-### 实验 E0: 环境验证
-```python
-# ✅ 检查项
-- [ ] PyTorch 安装成功
-- [ ] GPU 可用 (如果有)
-- [ ] MNIST 数据集加载成功
-- [ ] 简单模型可训练
-```
-
-### 实验 E1: Dense Baseline (论文 Table 1)
-```python
-# 配置
-model: MLP-3层 / ResNet-18 / BERT-base
-dataset: MNIST / CIFAR-10 / SQuAD
-metric: Accuracy / F1
-
-# ✅ 检查项
-- [ ] Dense 模型训练到收敛
-- [ ] 记录准确率、参数量、推理时间
-- [ ] 保存模型检查点
-```
-
-### 实验 E2: One-shot Pruning
-```python
-# 配置
-pruning_method: Magnitude / Wanda / SparseGPT
-target_sparsity: [0.3, 0.5, 0.7, 0.9, 0.95]
-
-# ✅ 检查项
-- [ ] 每个稀疏度下剪枝成功
-- [ ] 记录剪枝后准确率 (无恢复)
-- [ ] 绘制稀疏度 vs 准确率曲线
-```
-
-### 实验 E3: Recovery 对比
-```python
-# 配置
-recovery_levels: [0, 1, 2, 3]  # None, Reconstruct, LoRA, Distillation
-sparsity: 0.9
-
-# ✅ 检查项
-- [ ] Level 0: 直接评估
-- [ ] Level 1: 重建训练 5 epochs
-- [ ] Level 2: LoRA 恢复
-- [ ] Level 3: 自蒸馏
-- [ ] 对比各级别的准确率提升
-```
-
-### 实验 E4: 端到端自主搜索
-```python
-# 配置
-max_iterations: 10
-target_sparsity: 0.9
-controller: heuristic
-
-# ✅ 检查项
-- [ ] 搜索循环完整运行
-- [ ] 每轮记录 capability gap
-- [ ] 最终模型达到目标稀疏度
-- [ ] 准确率超过 one-shot baseline
-```
-
-### 实验 E5: 消融研究
-```python
-# 对比组
-variants: [
-    "no_sensitivity",      # 随机选择剪枝层
-    "no_frontier",         # 不使用前沿分析
-    "no_controller",       # 固定剪枝策略
-    "no_recovery",         # 无恢复
-    "full_method"          # 完整方法
-]
-
-# ✅ 检查项
-- [ ] 每个变体独立实验
-- [ ] 记录准确率和搜索轮数
-- [ ] 统计显著性检验
-```
-
----
-
-## 🎯 里程碑时间线
-
-```
-Week 1  ████░░░░░░░░░░░░░░░░  Checkpoint 1: Dense Baseline ✓
-Week 2  ████████░░░░░░░░░░░░  实现剪枝和敏感度分析
-Week 3  ████████████░░░░░░░░  Checkpoint 2: One-shot Pruning ✓
-Week 4  ████████████████░░░░  端到端集成
-Week 5  ████████████████░░░░  Checkpoint 3: 完整搜索循环 ✓
-Week 6  ████████████████████  实验验证和论文复现
-```
-
----
-
-## 🐛 常见问题排查
-
-### 问题 1: 剪枝后模型无法运行
-**症状**: `RuntimeError: size mismatch`
-**原因**: 层间维度不匹配
-**解决**:
-```python
-# 确保剪枝时同步更新相邻层
-if prune_layer_i:
-    layer_i.out_features = new_dim
-    layer_i_plus_1.in_features = new_dim
-```
-
-### 问题 2: 恢复训练不收敛
-**症状**: Loss 震荡或 NaN
-**原因**: 学习率过大
-**解决**:
-```python
-# 使用更小的学习率和 warmup
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
-scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=100)
-```
-
-### 问题 3: GPU 内存不足
-**症状**: `CUDA out of memory`
-**解决**:
-```python
-# 1. 减小 batch size
-batch_size = 16  # 从 64 降低
-
-# 2. 梯度累积
-accumulation_steps = 4
-for i, batch in enumerate(dataloader):
-    loss = model(batch) / accumulation_steps
-    loss.backward()
-    if (i + 1) % accumulation_steps == 0:
-        optimizer.step()
-        optimizer.zero_grad()
-
-# 3. 混合精度训练
-from torch.cuda.amp import autocast, GradScaler
-scaler = GradScaler()
-with autocast():
-    loss = model(batch)
-```
-
-### 问题 4: 搜索过程太慢
-**症状**: 单轮迭代 > 1 小时
-**优化**:
-```python
-# 1. 使用更小的 cheap critic 数据集
-mini_dataset = random.sample(train_dataset, k=500)
-
-# 2. 并行评估候选
-from concurrent.futures import ThreadPoolExecutor
-with ThreadPoolExecutor(max_workers=4) as executor:
-    scores = list(executor.map(cheap_critic, candidates))
-
-# 3. 缓存敏感度计算
-@functools.lru_cache(maxsize=32)
-def compute_sensitivity(model_state_hash):
-    ...
-```
-
----
-
-## 📝 每日开发日志模板
-
-```markdown
-## YYYY-MM-DD
-
-### 今日目标
-- [ ] 任务 1
-- [ ] 任务 2
-
-### 完成内容
-- ✅ 实现了 XXX 功能
-- ✅ 修复了 YYY bug
-- 📊 实验结果: Accuracy = XX%
-
-### 遇到的问题
-1. **问题描述**: ...
-   **解决方案**: ...
-
-### 明日计划
-- [ ] 任务 1
-- [ ] 任务 2
-
-### 代码变更
-- 新增文件: `src/xxx.py`
-- 修改文件: `src/yyy.py`
-- Commit: `git commit -m "..."`
-```
-
----
-
-## 🔗 快速链接
-
-- 详细计划: [PROJECT_PLAN.md](PROJECT_PLAN.md)
-- 论文原文: `Autonomous Lottery Ticket Discovery (1).pdf`
-- 实验细节: `Autonomous Lottery Ticket Discovery_experient.pdf`
-- 代码仓库: https://github.com/upUpUP-cody/Model-Compression
-
----
-
-## ✅ 下一步行动
-
-**立即执行** (今天就可以开始):
-1. ⬜️ 创建项目目录结构
-2. ⬜️ 安装 Python 依赖
-3. ⬜️ 下载 MNIST 数据集
-4. ⬜️ 实现简单的 3 层 MLP
-5. ⬜️ 训练 Dense Baseline
-
-**本周目标**:
-- ⬜️ 完成阶段 0 (环境搭建)
-- ⬜️ 完成阶段 A.1 (Dense Baseline)
-- ⬜️ 开始阶段 A.2 (结构化剪枝)
-
-**需要决策**:
-- [ ] 确认初始模型: MNIST+MLP 还是 CIFAR-10+ResNet?
-- [ ] 确认 GPU 资源: 本地还是云端?
-- [ ] 确认目标时间: MVP (4周) 还是完整版 (8周)?
-
----
-
-**更新日期**: 2026-08-11
-**当前阶段**: 阶段 0 - 环境搭建
-**进度**: 0% (0/7 阶段完成)
+- [完整项目总计划](PROJECT_PLAN.md)：长期路线图和全局目标。
+- [当前执行计划](EXECUTION_PLAN.md)：P0/P1/P2 执行顺序、研究协议和阶段验收。
+- [项目入口](README.md)：环境、实际命令和当前范围。
+- [事实进度](PROGRESS.md)：已经验证的内容、阻塞和当前任务。
+- [MVP 归档](MVP_DEVELOPMENT_PLAN.md)：提交 `e40ca88` 的已交付范围。
+- [工作流](WORKFLOW.md)：开发、实验和产物管理规则。

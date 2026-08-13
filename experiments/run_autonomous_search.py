@@ -63,6 +63,8 @@ def main() -> None:
         recovery_epochs=config["recovery"]["epochs"],
         recovery_learning_rate=config["recovery"]["learning_rate"],
         device=config["hardware"]["device"],
+        enable_two_layer_candidates=config["search"].get("enable_two_layer_candidates", False),
+        recovery_top_k=config["search"].get("recovery_top_k", 1),
     )
     for event in history.events:
         artifacts.append_event(event)

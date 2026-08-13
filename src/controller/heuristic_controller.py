@@ -1,5 +1,5 @@
 """Deterministic heuristic decisions for autonomous pruning."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Optional, Set
 
 
@@ -122,7 +122,7 @@ class HeuristicController:
         return ControllerDecision("accept", "constraints_satisfied", fingerprint)
 
     def reset(self) -> None:
-        """Clear duplicate tracking before a new search run."""
+        """Clear legacy direct-call duplicate tracking."""
         self._seen_fingerprints.clear()
 
     @staticmethod
@@ -161,6 +161,14 @@ class HeuristicController:
                 else float(values["capability_gap"])
             ),
         )
+
+    def _seen_from_history(self, history: Optional[Any]) -> Set[str]:
+        """Read run-owned duplicate state, retaining direct-call compatibility."""
+        if history is None:
+            return self._seen_fingerprints
+        if isinstance(history, dict):
+            return set(history.get("attempted_fingerprints", ()))
+        return set(getattr(history, "attempted_fingerprints", ()))
 
     @staticmethod
     def _failure_count(history: Optional[Any]) -> int:

@@ -26,6 +26,8 @@ search:
   candidates_per_round: 2
   candidate_ratios: [0.3, 0.5]
   cheap_eval_samples: 500
+  enable_two_layer_candidates: false
+  recovery_top_k: 1
 
 recovery:
   level: 1

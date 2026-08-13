@@ -1,5 +1,7 @@
 # Autonomous Lottery Ticket Discovery - 项目实施计划
 
+> 本文件是项目的完整长期路线图、阶段目标和全局成功标准。当前 P0/P1/P2 的执行顺序、研究协议和阶段验收条件见 [EXECUTION_PLAN.md](EXECUTION_PLAN.md)。
+>
 > 更新状态：[完成] MVP 核心流程已完成并通过自动化测试；MNIST CPU 冒烟实验已完成。论文级实验、LoRA/自蒸馏恢复和 GPU 扩展仍未实施。
 >
 > 最近验证：`python -m pytest tests -q` -> `46 passed`。

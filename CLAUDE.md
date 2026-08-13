@@ -46,3 +46,25 @@ grep -rn "[\U0001F000-\U0001FFFF]" src/ experiments/
 预计时长: 约 20 分钟（9 个剪枝比例 × 10 epoch 恢复训练）
 完成后生成: results/frontier_profiling_results.json, results/frontier_curve.png
 ```
+
+---
+
+## 任务完成与自动提交
+
+**规则**: 一个开发任务完成后，必须先完成验证，再自动提交本次任务涉及的代码、配置、测试和文档变更。
+
+提交前必须执行：
+
+1. 运行与本次改动相关的聚焦测试。
+2. 运行完整测试：`python -m pytest tests -q`。
+3. 运行 `git diff --check`。
+4. 检查 `git status --short` 和 `git diff`，确认没有误包含临时产物、数据集、缓存、大型 checkpoint 或他人未授权的修改。
+5. 只有所有检查通过后，才执行 Git commit，并在提交后检查 `git status --short` 和 `git log -1 --oneline`。
+
+如果测试、差异检查或变更范围检查失败，禁止自动提交，必须先修复问题或明确报告阻塞原因。`.claude/settings.json` 属于本地用户配置，默认不得加入项目提交。
+
+提交信息应简洁描述本次任务，并以以下署名结尾：
+
+```
+Co-Authored-By: Claude <noreply@anthropic.com>
+```

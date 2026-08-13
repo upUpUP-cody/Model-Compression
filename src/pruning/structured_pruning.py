@@ -141,6 +141,33 @@ class StructuredPruning:
             self.prune_linear_block(layer_name, keep_indices)
         return self.get_structural_parameter_count()
 
+    def prune_by_layer_indices(self, layer_keep_indices: Dict[str, Sequence[int]]) -> int:
+        """Apply explicit hidden-neuron keep indices without recalculating importance."""
+        if not isinstance(layer_keep_indices, dict):
+            raise ValueError("layer_keep_indices must be a dictionary")
+
+        normalized_indices = {}
+        for layer_name, keep_indices in layer_keep_indices.items():
+            layer = self._validate_hidden_linear(layer_name)
+            normalized_indices[layer_name] = self._validate_keep_indices(layer, keep_indices)
+
+        ordered_layers = [
+            layer_name
+            for layer_name in self._hidden_linear_layer_names()
+            if layer_name in normalized_indices
+        ]
+        for layer_name in reversed(ordered_layers):
+            self.prune_linear_block(layer_name, normalized_indices[layer_name])
+        return self.get_structural_parameter_count()
+
+    def create_pruned_model_by_indices(
+        self, layer_keep_indices: Dict[str, Sequence[int]]
+    ) -> nn.Module:
+        """Create an independently pruned copy using explicit keep indices."""
+        pruned_model = copy.deepcopy(self.model)
+        StructuredPruning(pruned_model).prune_by_layer_indices(layer_keep_indices)
+        return pruned_model
+
     def create_pruned_model(self, pruning_config: Dict[str, float]) -> nn.Module:
         """Create an independently pruned copy of the source model."""
         pruned_model = copy.deepcopy(self.model)

@@ -104,6 +104,33 @@ def test_create_pruned_model_preserves_source_model():
     assert {name: tuple(parameter.shape) for name, parameter in model.named_parameters()} == source_shapes
 
 
+def test_explicit_indices_prune_copy_and_preserve_selected_connections():
+    model = make_model()
+    source_state = clone_state(model)
+    original_first_weight = model.features[0].weight.detach().clone()
+    original_batch_norm_mean = model.features[1].running_mean.detach().clone()
+    original_next_weight = model.features[3].weight.detach().clone()
+
+    pruned_model = StructuredPruning(model).create_pruned_model_by_indices({"features.0": [1, 4, 5]})
+
+    assert torch.equal(pruned_model.features[0].weight, original_first_weight[[1, 4, 5]])
+    assert torch.equal(pruned_model.features[1].running_mean, original_batch_norm_mean[[1, 4, 5]])
+    assert torch.equal(pruned_model.features[3].weight, original_next_weight[:, [1, 4, 5]])
+    assert_state_equal(model, source_state)
+
+
+def test_explicit_indices_validate_all_layers_before_mutation():
+    model = make_model()
+    state = clone_state(model)
+
+    with pytest.raises(ValueError):
+        StructuredPruning(model).prune_by_layer_indices(
+            {"features.0": [0, 1, 2], "features.3": [99]}
+        )
+
+    assert_state_equal(model, state)
+
+
 def test_ratio_selection_is_deterministic_and_zero_is_noop():
     model = make_model()
     pruner = StructuredPruning(model)

@@ -1,212 +1,56 @@
-# 项目进度总览
+# 项目事实进度
 
-## 已完成阶段
+更新日期：2026-08-13
 
-### ✅ 阶段 A - 基础组件实现 (100%)
+## 当前实现状态
 
-#### A.1 - Dense Baseline 模型
-- ✅ MLP 模型实现
-- ✅ 训练器实现
-- ✅ 达到 98.43% 准确率
-- 📄 报告: `results/STEP_A1_REPORT.md`
+已提交 CPU-first MNIST MLP 自主结构化剪枝 MVP（`e40ca88`）。该 MVP 包含：
 
-#### A.2 - 结构化剪枝算子
-- ✅ 均匀剪枝
-- ✅ 按层剪枝
-- ✅ 参数统计
-- 📄 报告: `results/STEP_A2_REPORT.md`
+- 顺序 MLP 的物理结构化剪枝，以及 BatchNorm 和下游 Linear 的同步更新。
+- Cheap Critic 的无副作用、小样本评估。
+- 基础启发式控制器和自主搜索循环。
+- CPU YAML 配置、JSONL/CSV/summary/checkpoint/图表产物基础设施。
+- 面向上述模块的合成数据自动化测试。
 
-#### A.3 - 敏感度分析
-- ✅ Weight Magnitude 方法
-- ✅ Wanda Score 方法
-- ✅ Gradient Sensitivity 方法
-- ✅ 三种方法对比实验
-- 📄 报告: `results/STEP_A3_REPORT.md`
+历史记录显示提交前运行过 `python -m pytest tests -q`，结果为 `46 passed`。该记录只说明当时提交前的状态；后续修改完成后必须重新验证。
 
----
+## 当前阻塞与限制
 
-### ✅ 阶段 C - 恢复策略实现 (50%)
+- 搜索计算 Wanda 重要性，但尚未验证其结果实际决定物理剪枝的保留索引。
+- 候选池的完整审计、controller 跨 run 状态隔离、rollback 的恢复并停止语义尚未完成。
+- Level 1 recovery 尚未保证返回最佳 validation 权重。
+- 当前 frontier/proposal 仍存在旧的并行实现，未形成真实 Pareto archive。
+- 当前数据加载和实验入口尚未严格分离 train、validation 和 official test。
+- 已清理历史 smoke 实验产物；它们不能作为当前可复核结果。
 
-#### C.2 - Level 1: 重建恢复 ✅
-- ✅ 重建恢复模块实现
-- ✅ 快速恢复接口
-- ✅ 4个剪枝比例完整实验
-- 🎯 **关键成果**:
-  - 50% 剪枝 → 98.55% (超过原始!)
-  - 90% 剪枝 → 97.49% (13.57x 压缩)
-- 📄 报告: `results/STEP_C2_REPORT.md`
+## 正在进行
 
-#### C.3 - Level 2: LoRA 恢复 ⏭️
-- 状态: 未开始（可选）
+P0 搜索正确性与审计链路加固。详细工作项和验收条件见 [EXECUTION_PLAN.md](EXECUTION_PLAN.md)；长期项目方向见 [PROJECT_PLAN.md](PROJECT_PLAN.md)。
 
----
+当前优先级：
 
-### ⏳ 阶段 B - 前沿分析 (实现完成，实验运行中)
+1. Wanda 到显式 `keep_indices` 的可验证数据通路。
+2. 单次敏感度遍历、完整候选事件、deterministic shortlist 和 rollback stop。
+3. 最佳 validation recovery 与规范 Pareto frontier。
 
-#### B.1 - Capability Frontier Profiling ⏳
-- ✅ 前沿分析器实现
-- ✅ 帕累托前沿计算
-- ✅ 关键配置点识别
-- ✅ 可视化功能
-- ⏳ 后台实验运行中 (9个剪枝比例，预计15-20分钟)
-- 📄 报告: `results/STEP_B1_REPORT.md`
+## 验证命令
 
-#### B.2 - Lottery Ticket Proposal ⏳
-- ✅ 彩票提议器实现
-- ✅ 三种提议策略 (保守/激进/平衡)
-- ✅ 智能压缩率匹配
-- ✅ 提议评估系统
-- ⏳ 后台实验运行中 (3个压缩率 × 3个策略，预计20-25分钟)
-- 📄 报告: `results/STEP_B2_REPORT.md`
-
----
-
-## 待完成阶段
-
-### ⏭️ 阶段 D - 端到端集成
-
-**目标**: 串联所有组件，实现完整的自主彩票发现流程
-
-**子任务**:
-- D.1: 完整流程实现
-  - 敏感度分析 → 提议生成 → 剪枝 → 恢复 → 评估
-- D.2: Controller 实现
-  - 自动接受/拒绝提议
-  - 迭代优化
-- D.3: 端到端实验
-  - 完整流程验证
-  - 与基线方法对比
-
-**依赖**: 阶段 B 实验完成后即可开始
-
----
-
-### ⏭️ 阶段 E - 高级功能（可选）
-
-- E.1: 迁移到 CIFAR-10/ImageNet
-- E.2: 支持 CNN 模型
-- E.3: 分布式训练
-- E.4: 可视化仪表板
-
----
-
-## 当前后台任务
-
-### 任务 1: Frontier Profiling
-- **状态**: ⏳ 运行中
-- **ID**: bgh3ghuo5
-- **内容**: 探索 9 个剪枝比例 (10%-90%)
-- **预计完成**: ~15-20 分钟
-- **输出**:
-  - `results/frontier_profiling_results.json`
-  - `results/frontier_curve.png`
-
-### 任务 2: Lottery Ticket Proposal
-- **状态**: ⏳ 运行中
-- **ID**: byv9kuoum
-- **内容**: 3个压缩率 × 3个策略 = 9个提议
-- **预计完成**: ~20-25 分钟
-- **输出**:
-  - `results/proposals_compression_2x.json`
-  - `results/proposals_compression_4x.json`
-  - `results/proposals_compression_8x.json`
-  - `results/lottery_ticket_proposals_summary.json`
-
----
-
-## 整体进度
-
-```
-阶段 A: ████████████████████ 100% ✅
-阶段 B: ██████████████████░░  90% ⏳ (实现完成，实验中)
-阶段 C: ██████████░░░░░░░░░░  50% ⏸️ (Level 1 完成)
-阶段 D: ░░░░░░░░░░░░░░░░░░░░   0% ⏭️
-阶段 E: ░░░░░░░░░░░░░░░░░░░░   0% ⏭️
+```bash
+python -m pytest tests -q
 ```
 
-**总体完成度**: 约 60%
+当前 MVP 搜索入口：
 
----
-
-## 关键成果
-
-### 🎯 已验证的核心发现
-
-1. **彩票假设验证** ✅
-   - 50% 剪枝 + 恢复 = 98.55% (超过原始 98.43%)
-   - 证明了稀疏子网络的存在和有效性
-
-2. **极致压缩可行性** ✅
-   - 90% 剪枝 → 97.49% (13.57x 压缩，损失 < 1%)
-   - 实用部署价值巨大
-
-3. **敏感度指导有效** ✅
-   - 不同层的重要性差异显著
-   - 可指导智能剪枝策略
-
-### 🚀 论文核心方法实现
-
-- ✅ Self-Diagnosis (敏感度分析)
-- ⏳ Capability Frontier Profiling (前沿分析)
-- ⏳ Lottery Ticket Proposal (智能提议)
-- ⏭️ Controller (自动决策)
-
----
-
-## 下一步建议
-
-### 选项 1: 等待实验完成 (推荐)
-- 时间: ~20-25 分钟
-- 然后查看结果并进入阶段 D
-
-### 选项 2: 立即开始阶段 D
-- 可以并行进行
-- 使用现有数据开始集成工作
-
-### 选项 3: 完善阶段 C
-- 实现 Level 2 (LoRA) 恢复
-- 补充恢复策略库
-
----
-
-## 文件结构
-
-```
-Model-Compression/
-├── src/
-│   ├── models/
-│   │   └── dense_baseline.py          ✅
-│   ├── pruning/
-│   │   ├── structured_pruning.py      ✅
-│   │   └── sensitivity.py             ✅
-│   ├── recovery/
-│   │   └── reconstruction.py          ✅
-│   └── frontier/
-│       ├── profiling.py               ✅
-│       └── proposal.py                ✅
-├── experiments/
-│   ├── exp_mnist_baseline.py          ✅
-│   ├── exp_pruning_basic.py           ✅
-│   ├── exp_sensitivity_analysis.py    ✅
-│   ├── exp_recovery_level1.py         ✅
-│   ├── exp_frontier_profiling.py      ⏳
-│   └── exp_lottery_ticket_proposal.py ⏳
-├── results/
-│   ├── STEP_A1_REPORT.md              ✅
-│   ├── STEP_A2_REPORT.md              ✅
-│   ├── STEP_A3_REPORT.md              ✅
-│   ├── STEP_B1_REPORT.md              ✅
-│   ├── STEP_B2_REPORT.md              ✅
-│   ├── STEP_C2_REPORT.md              ✅
-│   ├── recovery_level1_results.json   ✅
-│   ├── frontier_profiling_results.json ⏳
-│   └── lottery_ticket_proposals_*.json ⏳
-└── checkpoints/
-    └── dense_baseline_best.pth        ✅
+```bash
+python experiments/run_autonomous_search.py --config configs/mnist_mlp_autonomous_cpu.yaml
 ```
 
----
+执行真实 MNIST 实验前，先确认数据集和基线 checkpoint 可用。预计超过五分钟的实验启动后必须记录实验名称、预计时长和输出路径；official test 集不得参与搜索或模型选择。
 
-**最后更新**: 2026-08-12
-**实验状态**: 2个后台任务运行中
-**下一里程碑**: 阶段 D - 端到端集成
+## 文档关系
+
+- [PROJECT_PLAN.md](PROJECT_PLAN.md)：完整项目总计划、长期路线图和全局目标。
+- [EXECUTION_PLAN.md](EXECUTION_PLAN.md)：当前执行计划、研究协议和阶段验收。
+- [ROADMAP.md](ROADMAP.md)：当前阶段和里程碑导航。
+- [MVP_DEVELOPMENT_PLAN.md](MVP_DEVELOPMENT_PLAN.md)：已完成 MVP 的归档。
+- [README.md](README.md)：项目入口与实际操作命令。

@@ -1,50 +1,44 @@
-# 自主搜索 MVP 小计划
+# CPU-first MNIST MLP MVP 归档
 
-## 目标
+## 归档范围
 
-为 MNIST MLP 建立一个 CPU 优先、可复现的结构化剪枝自主搜索流程：生成候选、快速筛选、恢复训练、接受或回滚，并保存完整实验记录。
+本文件记录已完成的 MVP 范围，不再作为后续开发任务来源，也不替代项目总计划或当前执行计划。长期项目方向见 [PROJECT_PLAN.md](PROJECT_PLAN.md)；后续任务、研究协议和验收条件以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 为准。
 
-## 实施顺序
+- 对应提交：`e40ca88`（Implement CPU autonomous pruning MVP）。
+- 目标：建立 CPU-first、MNIST MLP 专用的自主结构化剪枝流程。
+- 实现时间：2026-08-12。
 
-1. 加固结构化剪枝
-   - 校验剪枝比例、层名和保留索引。
-   - 禁止剪枝最终分类层。
-   - 同步更新 BatchNorm 和下游 Linear 层维度。
-   - 提供前向验证与结构化参数统计。
+## 已交付内容
 
-2. 实现启发式控制器
-   - 支持 `accept`、`reject`、`rollback`、`regrow`。
-   - 按压缩收益、准确率约束、失败次数和重复候选进行确定性决策。
+1. 物理结构化剪枝
+   - `src/pruning/structured_pruning.py` 支持顺序 MLP 隐藏 `Linear` 神经元裁剪。
+   - 裁剪会同步更新中间 `BatchNorm1d` 和下游 `Linear` 输入维度。
+   - 最终 `classifier` 不允许裁剪；剪枝模型可前向、反向传播，并需使用新 optimizer。
 
-3. 实现 Cheap Critic
-   - 提供严格样本上限的推理评估。
-   - 返回损失、准确率、参数量、非零参数量和耗时。
-   - 不修改模型权重、缓冲区或训练模式。
+2. 搜索基础组件
+   - `src/evaluation/cheap_critic.py` 提供严格样本上限、无副作用的快速评估。
+   - `src/controller/heuristic_controller.py` 提供基础 `accept`、`reject`、`rollback`、`regrow` 决策。
+   - `src/autonomous_search.py` 负责候选深拷贝、快速筛选、Level 1 恢复、完整 validation 与 JSON-safe 历史记录。
 
-4. 实现自主搜索循环
-   - 每个候选从当前已接受模型的深拷贝创建。
-   - 使用 Wanda 神经元重要性生成剪枝候选。
-   - 先运行 Cheap Critic，再对候选执行一级恢复训练和完整验证。
-   - 只在满足能力约束且真实参数量减少时接受候选。
+3. 配置与产物
+   - CPU YAML 配置位于 `configs/mnist_mlp_autonomous_cpu.yaml` 和 smoke 配置。
+   - `src/utils/experiment_artifacts.py` 保存 resolved config、JSONL、CSV、summary、checkpoint 和搜索图。
+   - `experiments/run_autonomous_search.py` 可直接运行 MVP 入口。
 
-5. 配置、日志和可视化
-   - 使用 CPU 安全 YAML 配置和固定随机种子。
-   - 保存解析配置、JSONL 事件、汇总 JSON、CSV、检查点和图表。
+4. 测试
+   - 为结构化剪枝、Cheap Critic、控制器、自主搜索和 artifacts 添加了合成数据 pytest。
+   - 历史验证：提交前执行 `python -m pytest tests -q`，结果为 `46 passed`。
 
-6. 测试与验证
-   - 使用合成数据编写 pytest，不下载 MNIST。
-   - 先运行一轮 MNIST 冒烟实验，再运行标准 CPU 实验。
+## 归档边界与已知限制
 
-## 验收标准
+- 仅支持顺序 MLP；不支持残差、分支、共享层、CNN、Transformer 或 GPU。
+- Wanda 分数已被计算，但当前版本尚未保证这些分数驱动实际物理保留索引；实际搜索的正确性加固属于 P0 工作。
+- 当前 `regrow` 是降低后续剪枝强度，不是恢复已删除网络结构。
+- rollback、候选完整审计、最佳 recovery 权重恢复和规范 Pareto frontier 仍需按主计划实现。
+- 历史 smoke 运行目录已清理，不能作为当前可复核结果。
+- 不将根目录的临时检查脚本视为 MVP 依赖；此前的 `test_frontier.py` 已清理。
 
-- 剪枝后模型可以完成前向和反向传播。
-- 候选之间互不污染，拒绝或回滚不会改变已接受模型。
-- 搜索历史可 JSON 序列化，不保存张量或模型对象。
-- 冒烟实验能生成检查点、历史汇总和非空图表。
-- 所有自动化测试通过。
+## 持续运行约束
 
-## 运行约束
-
-- 所有 `print()` 输出必须使用 ASCII 安全文本，避免 Windows GBK 编码失败。
-- 预计超过五分钟的后台实验启动后，必须报告实验名称、预计时长和输出文件路径。
-- 不修改或删除根目录的 `test_frontier.py` 手工诊断脚本。
+- 所有新增 Python `print()` 必须使用 ASCII 安全文本，避免 Windows GBK 编码问题。
+- 预计超过五分钟的后台实验启动后，必须说明实验名称、预计时长和输出文件路径。

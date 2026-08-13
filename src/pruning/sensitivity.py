@@ -74,6 +74,9 @@ class SensitivityAnalyzer:
 
             batch_count += 1
 
+        if batch_count == 0:
+            raise ValueError("dataloader must yield at least one batch")
+
         # 计算平均敏感度
         for name, grad_sum in gradient_accumulator.items():
             sensitivity_scores[name] = grad_sum / batch_count
@@ -96,80 +99,79 @@ class SensitivityAnalyzer:
 
         return sensitivity_scores
 
+    def compute_wanda_importance(
+        self,
+        dataloader: DataLoader,
+        num_batches: int = 10,
+    ) -> Dict[str, torch.Tensor]:
+        """Compute hidden-Linear Wanda scores in one streaming data pass."""
+        if isinstance(num_batches, bool) or not isinstance(num_batches, int) or num_batches <= 0:
+            raise ValueError("num_batches must be a positive integer")
+
+        linear_layers = [
+            (name, module)
+            for name, module in self.model.named_modules()
+            if isinstance(module, nn.Linear)
+        ]
+        hidden_layers = linear_layers[:-1]
+        if not hidden_layers:
+            raise ValueError("model must contain at least one hidden Linear layer")
+
+        activation_sums: Dict[str, torch.Tensor] = {}
+        activation_counts: Dict[str, int] = {}
+        hooks = []
+        was_training = self.model.training
+
+        def get_activation(name: str):
+            def hook(_module: nn.Module, _inputs: Tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
+                values = output.detach().abs()
+                if values.ndim != 2:
+                    raise ValueError(f"Linear layer {name} must produce two-dimensional activations")
+                batch_sum = values.sum(dim=0)
+                if name not in activation_sums:
+                    activation_sums[name] = batch_sum.clone()
+                    activation_counts[name] = int(values.shape[0])
+                else:
+                    activation_sums[name].add_(batch_sum)
+                    activation_counts[name] += int(values.shape[0])
+            return hook
+
+        self.model.eval()
+        try:
+            for name, module in hidden_layers:
+                hooks.append(module.register_forward_hook(get_activation(name)))
+
+            batch_count = 0
+            with torch.inference_mode():
+                for data, _target in dataloader:
+                    if batch_count >= num_batches:
+                        break
+                    self.model(data.to(self.device))
+                    batch_count += 1
+
+            if batch_count == 0:
+                raise ValueError("dataloader must yield at least one batch")
+
+            wanda_scores = {}
+            for name, module in hidden_layers:
+                if name not in activation_sums or activation_counts[name] == 0:
+                    raise ValueError(f"No activations collected for hidden Linear layer {name}")
+                average_activation = activation_sums[name] / activation_counts[name]
+                weight_magnitude = torch.norm(module.weight.detach(), p=2, dim=1)
+                wanda_scores[name] = (weight_magnitude * average_activation).detach()
+            return wanda_scores
+        finally:
+            for hook in hooks:
+                hook.remove()
+            self.model.train(was_training)
+
     def compute_wanda_sensitivity(
         self,
         dataloader: DataLoader,
         num_batches: int = 10
     ) -> Dict[str, torch.Tensor]:
-        """
-        计算 Wanda 分数 (Weight AND Activation)
-        Wanda Score = |Weight| * |Activation|
-
-        Args:
-            dataloader: 数据加载器
-            num_batches: 使用的批次数
-
-        Returns:
-            {layer_name: wanda_scores (神经元级别)}
-        """
-        self.model.eval()
-
-        # 注册前向钩子来捕获激活值
-        activations = {}
-        hooks = []
-
-        def get_activation(name):
-            def hook(model, input, output):
-                if name not in activations:
-                    activations[name] = []
-                # 对于线性层，output shape 是 (batch, features)
-                activations[name].append(output.detach())
-            return hook
-
-        # 为所有 Linear 层注册钩子
-        for name, module in self.model.named_modules():
-            if isinstance(module, nn.Linear):
-                hooks.append(module.register_forward_hook(get_activation(name)))
-
-        # 前向传播收集激活值
-        batch_count = 0
-        with torch.no_grad():
-            for data, _ in dataloader:
-                if batch_count >= num_batches:
-                    break
-                data = data.to(self.device)
-                _ = self.model(data)
-                batch_count += 1
-
-        # 移除钩子
-        for hook in hooks:
-            hook.remove()
-
-        # 计算 Wanda 分数
-        wanda_scores = {}
-
-        for name, module in self.model.named_modules():
-            if isinstance(module, nn.Linear) and name in activations:
-                # 权重: (out_features, in_features)
-                weight = module.weight.data
-
-                # 激活值: list of (batch, out_features)
-                activation_list = activations[name]
-                # 合并所有批次: (total_samples, out_features)
-                all_activations = torch.cat(activation_list, dim=0)
-
-                # 计算每个神经元的平均激活幅度
-                avg_activation = torch.mean(torch.abs(all_activations), dim=0)  # (out_features,)
-
-                # 计算每个神经元的权重幅度
-                weight_magnitude = torch.norm(weight, p=2, dim=1)  # (out_features,)
-
-                # Wanda 分数 = 权重幅度 * 激活幅度
-                wanda = weight_magnitude * avg_activation
-
-                wanda_scores[name] = wanda
-
-        return wanda_scores
+        """Backward-compatible alias for all hidden-Linear Wanda scores."""
+        return self.compute_wanda_importance(dataloader, num_batches)
 
     def compute_layer_sensitivity(
         self,

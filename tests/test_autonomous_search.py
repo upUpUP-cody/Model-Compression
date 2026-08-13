@@ -1,10 +1,11 @@
 import copy
 import json
 
+import pytest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from src.autonomous_search import AutonomousSearch, candidate_fingerprint
+from src.autonomous_search import AutonomousSearch, CandidateSpec, candidate_fingerprint
 from src.controller.heuristic_controller import HeuristicController
 from src.evaluation.cheap_critic import CheapCriticResult
 from src.models.dense_baseline import MLP
@@ -152,3 +153,68 @@ def test_search_skips_previously_attempted_configurations():
     assert len(history.events) == 2
     assert history.events[-1]["action"] == "stop"
     assert history.events[-1]["reason"] == "no_new_candidates"
+
+
+def test_search_physically_uses_wanda_indices_and_records_candidate_spec():
+    source = make_model()
+    with torch.no_grad():
+        source.features[0].weight.copy_(
+            torch.tensor(
+                [
+                    [10.0, 0.0, 0.0, 0.0],
+                    [9.0, 0.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.5, 0.0, 0.0, 0.0],
+                ]
+            )
+        )
+    original_weight = source.features[0].weight.detach().clone()
+
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=5.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=lambda *_args: {"features.0": torch.tensor([1.0, 2.0, 9.0, 8.0])},
+        recovery_fn=recovery,
+    )
+    accepted, history = search.run(
+        source,
+        make_loader(),
+        make_loader(),
+        max_iterations=1,
+        candidate_ratios=(0.5,),
+        candidates_per_round=1,
+        cheap_eval_samples=5,
+        recovery_epochs=0,
+    )
+
+    assert torch.equal(accepted.features[0].weight, original_weight[[2, 3]])
+    event = history.events[0]
+    assert event["candidate_spec"]["layer_keep_indices"] == {"features.0": [2, 3]}
+    assert event["importance_method"] == "wanda"
+    assert event["actual_parameter_count"] == sum(
+        parameter.numel() for parameter in accepted.parameters()
+    )
+    json.dumps(history.to_dict())
+
+
+def test_candidate_spec_is_immutable_and_fingerprint_includes_indices():
+    first = CandidateSpec.create(
+        {"features.0": 0.5},
+        {"features.0": [1, 2]},
+        "wanda",
+        parameter_count=10,
+        parent_parameter_count=20,
+    )
+    second = CandidateSpec.create(
+        {"features.0": 0.5},
+        {"features.0": [0, 2]},
+        "wanda",
+        parameter_count=10,
+        parent_parameter_count=20,
+    )
+
+    assert first.fingerprint != second.fingerprint
+    with pytest.raises(Exception):
+        first.parameter_count = 9
+    assert json.loads(json.dumps(first.to_dict())) == first.to_dict()
