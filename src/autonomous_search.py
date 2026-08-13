@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from src.controller.heuristic_controller import CandidateProfile, HeuristicController
 from src.evaluation.cheap_critic import CheapCritic, CheapCriticResult
 from src.evaluation.frontier import ParetoFrontier, FrontierPoint
-from src.pruning.pruning_backend import MlpBackend, PruningBackend, resolve_pruning_backend
+from src.pruning.pruning_backend import CnnBackend, MlpBackend, PruningBackend, resolve_pruning_backend
 from src.pruning.sensitivity import SensitivityAnalyzer
 from src.pruning.structured_pruning import StructuredPruning
 from src.recovery.reconstruction import quick_recovery
@@ -394,6 +394,15 @@ class AutonomousSearch:
         parent_parameter_count = _parameter_count(model)
         candidates = []
         layer_candidates = {}
+        if isinstance(backend, CnnBackend):
+            for ratio in ratios:
+                uniform = _uniform_all_layer_candidate(
+                    backend, importance, ratio, multiplier, parent_parameter_count
+                )
+                if uniform is not None and uniform.fingerprint not in attempted:
+                    candidates.append(uniform)
+                if limit is not None and len(candidates) == limit:
+                    return candidates
         for layer_name in backend.prunable_layer_names():
             scores = importance.get(layer_name)
             if scores is None:
@@ -449,6 +458,45 @@ class AutonomousSearch:
                             if limit is not None and len(candidates) == limit:
                                 return candidates
         return candidates
+
+
+def _uniform_all_layer_candidate(
+    backend: PruningBackend,
+    importance: Dict[str, torch.Tensor],
+    ratio: float,
+    multiplier: float,
+    parent_parameter_count: int,
+) -> Optional[CandidateSpec]:
+    adjusted_ratio = min(float(ratio) * multiplier, 0.99)
+    if not 0.0 < adjusted_ratio < 1.0:
+        return None
+    layer_ratios: Dict[str, float] = {}
+    keep_indices: Dict[str, List[int]] = {}
+    for layer_name in backend.prunable_layer_names():
+        scores = importance.get(layer_name)
+        if scores is None or not isinstance(scores, torch.Tensor) or scores.ndim != 1:
+            return None
+        output_size = backend.output_size(layer_name)
+        if scores.numel() != output_size:
+            return None
+        scores = scores.detach().reshape(-1).cpu()
+        if not torch.isfinite(scores).all().item():
+            raise ValueError(f"importance scores for {layer_name} must be finite")
+        num_keep = max(1, int(output_size * (1.0 - adjusted_ratio)))
+        ranked_indices = sorted(
+            range(output_size), key=lambda index: (-float(scores[index]), index)
+        )
+        layer_ratios[layer_name] = adjusted_ratio
+        keep_indices[layer_name] = sorted(ranked_indices[:num_keep])
+    if not layer_ratios:
+        return None
+    return CandidateSpec.create(
+        layer_ratios,
+        keep_indices,
+        importance_method="wanda",
+        parameter_count=0,
+        parent_parameter_count=parent_parameter_count,
+    )
 
 
 def config_to_json(config: Dict[str, float]) -> Dict[str, float]:

@@ -40,11 +40,7 @@ comparison:
   target_compression_ratio: 2.0
   compression_targets: [1.5, 2.0, 4.0, 6.0, 8.0, 10.0]
   dense_small_variant: small
-  oneshot_layer_ratios:
-    layer1.0.conv1: 0.3
   wanda_batches: 1
-  iterative_stage_ratios:
-    - layer1.0.conv1: 0.2
   recovery_epochs: 2
   recovery_learning_rate: 0.001
 logging:

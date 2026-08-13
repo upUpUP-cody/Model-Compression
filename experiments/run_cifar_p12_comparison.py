@@ -13,7 +13,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.autonomous_search import full_evaluate
 from src.experiments.cifar_p12_comparison import METHOD_NAMES, results_to_records, run_comparison
-from src.experiments.model_factory import build_model_from_config
+from src.experiments.compression_targets import ensure_compression_target
+from src.experiments.model_factory import build_dense_small_model, build_model_from_config, model_type_from_config
+from src.pruning.pruning_backend import resolve_pruning_backend
 from src.utils.data_loader import cifar10_split_metadata, get_cifar10_loaders
 from src.utils.device import configure_cuda, resolve_device
 from src.utils.experiment_artifacts import (
@@ -43,10 +45,11 @@ def _gpu_inference_benchmark(model: torch.nn.Module, loader, device: str, precis
     model.eval()
     data = data.to(resolved)
     with torch.inference_mode():
-        return benchmark_model(model, data, device=resolved, warmup=1, repeat=5, batch_size=int(data.shape[0]))
+        return benchmark_model(model, data, device=resolved, warmup=1, repeat=5)
 
 
 def run_study(config: Dict[str, Any], checkpoint_source: Path, command: str) -> Path:
+    config = ensure_compression_target(config)
     device = resolve_device(config["hardware"]["device"])
     set_seed(config["seed"], deterministic=bool(config["hardware"].get("deterministic", True)))
     set_cpu_threads(config["hardware"].get("cpu_threads"))
@@ -75,6 +78,9 @@ def run_study(config: Dict[str, Any], checkpoint_source: Path, command: str) -> 
         checkpoint = artifacts.save_checkpoint(result_model, f"{record['method']}.pth")
         record["checkpoint"] = str(checkpoint)
         record["checkpoint_sha256"] = file_sha256(checkpoint)
+        keep_indices = (record.get("details") or {}).get("layer_keep_indices")
+        if isinstance(keep_indices, dict) and keep_indices:
+            record["layer_keep_indices"] = keep_indices
     comparison_json, comparison_csv = artifacts.save_comparison(records)
     runtime = runtime_metadata(str(device), config["hardware"].get("precision", "fp32"))
     runtime["inference_benchmark"] = _gpu_inference_benchmark(
@@ -169,7 +175,7 @@ def run_test_report(study_dir: Path, config: Dict[str, Any], checkpoint_source: 
         raise ValueError("study split metadata does not match")
     reports = []
     for record in manifest["records"]:
-        model = build_model_from_config(config).to(device)
+        model = rebuild_cifar_model(config, record, device)
         load_baseline(model, Path(record["checkpoint"]), device)
         reports.append({
             "method": record["method"],
@@ -184,6 +190,21 @@ def run_test_report(study_dir: Path, config: Dict[str, Any], checkpoint_source: 
     return output
 
 
+def rebuild_cifar_model(config: Dict[str, Any], record: Dict[str, Any], device: str | torch.device) -> torch.nn.Module:
+    """Rebuild the frozen architecture for one comparison arm before loading weights."""
+    method = record.get("method")
+    if method == "dense_small":
+        return build_dense_small_model(config, str(device))
+    model = build_model_from_config(config)
+    keep_indices = record.get("layer_keep_indices")
+    if not isinstance(keep_indices, dict) or not keep_indices:
+        keep_indices = (record.get("details") or {}).get("layer_keep_indices")
+    if isinstance(keep_indices, dict) and keep_indices:
+        model_type = model_type_from_config(config)
+        model = resolve_pruning_backend(model, model_type).create_pruned_model_by_indices(keep_indices)
+    return model.to(resolve_device(device))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run CIFAR P1.2 comparison protocol")
     parser.add_argument("mode", choices=("study", "report-test"))
@@ -191,7 +212,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", default="checkpoints/cifar_resnet18_baseline.pth")
     parser.add_argument("--study-dir", type=Path)
     args = parser.parse_args()
-    config = load_config(args.config)
+    config = ensure_compression_target(load_config(args.config))
     checkpoint = Path(args.checkpoint)
     if args.mode == "study":
         print(f"[OK] Validation-only study artifacts: {run_study(config, checkpoint, ' '.join(sys.argv))}")

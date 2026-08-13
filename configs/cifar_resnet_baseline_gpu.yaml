@@ -34,7 +34,6 @@ search:
   candidates_per_round: 1
   candidate_ratios: [0.3]
   cheap_eval_samples: 64
-  cheap_eval_samples: 64
 recovery:
   level: 1
   epochs: 0

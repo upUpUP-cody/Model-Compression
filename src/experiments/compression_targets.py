@@ -47,7 +47,21 @@ def apply_compression_target(config: Mapping[str, Any], target_compression_ratio
     ratios = derive_uniform_layer_ratios(updated["model"], target_compression_ratio)
     comparison["oneshot_layer_ratios"] = dict(ratios)
     comparison["iterative_stage_ratios"] = [dict(ratios)]
+    comparison["layer_ratios_derived_for"] = float(target_compression_ratio)
     max_ratio = max(ratios.values())
     search = updated.setdefault("search", {})
     search["candidate_ratios"] = [max_ratio]
     return updated
+
+
+def ensure_compression_target(config: Mapping[str, Any]) -> Dict[str, Any]:
+    """Derive uniform layer ratios from comparison.target_compression_ratio when needed."""
+    updated = copy.deepcopy(dict(config))
+    comparison = updated.get("comparison") or {}
+    target = float(comparison.get("target_compression_ratio", 1.0))
+    if target <= 1.0:
+        return updated
+    derived_for = comparison.get("layer_ratios_derived_for")
+    if derived_for is not None and abs(float(derived_for) - target) < 1e-9:
+        return updated
+    return apply_compression_target(updated, target)

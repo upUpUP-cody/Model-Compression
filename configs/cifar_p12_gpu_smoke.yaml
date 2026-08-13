@@ -37,14 +37,9 @@ recovery:
   learning_rate: 0.001
 comparison:
   methods: [dense_baseline, dense_small, oneshot_magnitude, oneshot_wanda, iterative_structured_level1, autonomous_search]
-  target_compression_ratio: 1.5
+  target_compression_ratio: 2.0
   dense_small_variant: small
-  oneshot_layer_ratios:
-    layer1.0.conv1: 0.3
   wanda_batches: 1
-  iterative_stage_ratios:
-    - layer1.0.conv1: 0.2
-    - layer2.0.conv1: 0.2
   recovery_epochs: 0
   recovery_learning_rate: 0.001
 logging:

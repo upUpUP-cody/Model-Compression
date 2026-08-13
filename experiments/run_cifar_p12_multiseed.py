@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from experiments.run_cifar_p12_comparison import run_study, run_test_report
-from src.experiments.compression_targets import apply_compression_target
+from src.experiments.compression_targets import apply_compression_target, ensure_compression_target
 from src.experiments.p12_aggregate import aggregate_root
 from src.utils.experiment_artifacts import load_config
 
@@ -51,6 +51,8 @@ def run_multiseed(config_path: Path, checkpoint: Path, sweep: bool) -> Dict[str,
                 root = Path(config["logging"]["output_root"]) / label
                 config["logging"]["output_root"] = str(root)
                 config["run_label"] = f"{config.get('run_label', 'cifar_p12')}_{label}"
+            else:
+                config = ensure_compression_target(config)
             study_dir = run_study(config, checkpoint, " ".join(sys.argv))
             run_test_report(study_dir, config, checkpoint)
             study_dirs.append(str(study_dir))

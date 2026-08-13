@@ -10,6 +10,8 @@ from src.controller.heuristic_controller import HeuristicController
 from src.evaluation.cheap_critic import CheapCriticResult
 from src.evaluation.frontier import ParetoFrontier
 from src.models.dense_baseline import MLP
+from src.models.resnet_cifar import resnet18_cifar
+from src.pruning.pruning_backend import CnnBackend
 
 
 class FixedCritic:
@@ -254,3 +256,24 @@ def test_candidate_spec_is_immutable_and_fingerprint_includes_indices():
     with pytest.raises(Exception):
         first.parameter_count = 9
     assert json.loads(json.dumps(first.to_dict())) == first.to_dict()
+
+
+def test_cnn_search_proposes_uniform_all_layer_candidate_first():
+    model = resnet18_cifar(base_width=16)
+    backend = CnnBackend(model)
+    importance = {
+        name: torch.arange(backend.output_size(name), 0, -1, dtype=torch.float32)
+        for name in backend.prunable_layer_names()
+    }
+    candidates = AutonomousSearch._generate_candidates(
+        model,
+        importance,
+        ratios=(0.5,),
+        multiplier=1.0,
+        limit=1,
+        attempted=set(),
+        backend=backend,
+    )
+    assert len(candidates) == 1
+    assert set(candidates[0].ratios_dict()) == set(backend.prunable_layer_names())
+    assert all(ratio == 0.5 for ratio in candidates[0].ratios_dict().values())

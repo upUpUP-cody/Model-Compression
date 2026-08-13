@@ -250,14 +250,25 @@ def _iterative_structured(
     for stage, ratio_config in enumerate(stage_ratios, start=1):
         current_backend = resolve_pruning_backend(model, model_type)
         ratios = _layer_ratios(model, ratio_config, model_type)
-        model = current_backend.create_pruned_model(ratios).to(resolve_device(device))
+        keep_indices = _keep_indices(
+            current_backend, model, train_loader, ratios, "magnitude", device, comparison, model_type
+        )
+        model = current_backend.create_pruned_model_by_indices(keep_indices).to(resolve_device(device))
         start = time.perf_counter()
         model, history = run_recovery(
             model, train_loader, validation_loader, config, teacher_model=source_model
         )
         recovery_seconds += time.perf_counter() - start
-        stages.append({"stage": stage, "layer_ratios": ratios, "recovery": history})
-    return model, {"stages": stages}, recovery_seconds
+        stages.append({
+            "stage": stage,
+            "layer_ratios": ratios,
+            "layer_keep_indices": keep_indices,
+            "recovery": history,
+        })
+    merged_keep_indices: Dict[str, list[int]] = {}
+    for stage_record in stages:
+        merged_keep_indices.update(stage_record["layer_keep_indices"])
+    return model, {"stages": stages, "layer_keep_indices": merged_keep_indices}, recovery_seconds
 
 
 def _autonomous(
@@ -290,10 +301,21 @@ def _autonomous(
         recovery_top_k=int(search_config.get("recovery_top_k", 1)),
         frontier_archive=frontier,
     )
+    history_dict = history.to_dict()
+    keep_indices: Dict[str, list[int]] = {}
+    for event in reversed(history_dict.get("events") or []):
+        if event.get("final_action") != "accept":
+            continue
+        spec = event.get("candidate_spec") or {}
+        indices = spec.get("layer_keep_indices")
+        if isinstance(indices, dict) and indices:
+            keep_indices = {str(name): list(values) for name, values in indices.items()}
+            break
     return model, {
-        "history": history.to_dict(),
+        "history": history_dict,
         "frontier": frontier.to_dict(),
         "baseline_parameter_count": baseline_parameter_count,
+        "layer_keep_indices": keep_indices,
     }, time.perf_counter() - start
 
 
