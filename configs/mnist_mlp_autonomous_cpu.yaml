@@ -10,10 +10,13 @@ dataset:
   data_dir: ./data/mnist
   batch_size: 64
   num_workers: 0
+  validation_fraction: 0.1
+  split_seed: 42
 
 hardware:
   device: cpu
   mixed_precision: false
+  cpu_threads: 1
 
 controller:
   max_accuracy_drop_points: 5.0
@@ -38,4 +41,5 @@ logging:
   output_root: results/autonomous_search
   use_wandb: false
 
+run_label: mnist_cpu
 seed: 42

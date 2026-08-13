@@ -1,10 +1,15 @@
 """Configuration, reproducibility, and run artifact helpers."""
 import csv
+import hashlib
 import json
+import platform
 import random
+import subprocess
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Optional
 
 import numpy as np
 import torch
@@ -58,6 +63,10 @@ def validate_config(config: Dict[str, Any]) -> None:
         raise ValueError("controller.max_accuracy_drop_points must be non-negative")
     if config["recovery"]["epochs"] < 0:
         raise ValueError("recovery.epochs must be non-negative")
+    if not 0.0 < float(config["dataset"].get("validation_fraction", 0.1)) < 1.0:
+        raise ValueError("dataset.validation_fraction must be between 0 and 1")
+    if not isinstance(config["dataset"].get("split_seed", config["seed"]), int):
+        raise ValueError("dataset.split_seed must be an integer")
 
 
 def set_seed(seed: int) -> None:
@@ -87,12 +96,60 @@ def to_json_safe(value: Any) -> Any:
     raise TypeError(f"unsupported JSON value: {type(value).__name__}")
 
 
+def set_cpu_threads(num_threads: Optional[int] = None) -> int:
+    """Set and return the configured CPU intra-op thread count."""
+    if num_threads is not None:
+        if not isinstance(num_threads, int) or num_threads < 1:
+            raise ValueError("num_threads must be a positive integer")
+        torch.set_num_threads(num_threads)
+    return int(torch.get_num_threads())
+
+
+def file_sha256(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as input_file:
+        for chunk in iter(lambda: input_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def config_hash(config: Dict[str, Any]) -> str:
+    encoded = json.dumps(to_json_safe(config), sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def git_sha(project_root: str | Path = ".") -> Optional[str]:
+    try:
+        return subprocess.check_output(
+            ["git", "-C", str(project_root), "rev-parse", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def runtime_metadata() -> Dict[str, Any]:
+    return {
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "pytorch": torch.__version__,
+        "numpy": np.__version__,
+        "cpu_threads": int(torch.get_num_threads()),
+    }
+
+
 class RunArtifacts:
     """Persist configuration, event history, CSV, summary, and checkpoints."""
 
-    def __init__(self, output_root: str | Path, run_name: str = "autonomous_search") -> None:
+    def __init__(self, output_root: str | Path, run_name: str = "autonomous_search", run_id: Optional[str] = None) -> None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.run_dir = Path(output_root) / f"{run_name}_{timestamp}"
+        suffix = run_id or timestamp
+        self.run_dir = Path(output_root) / f"{run_name}_{suffix}"
+        counter = 1
+        while self.run_dir.exists():
+            self.run_dir = Path(output_root) / f"{run_name}_{suffix}_{counter}"
+            counter += 1
         self.run_dir.mkdir(parents=True, exist_ok=False)
         self.events_path = self.run_dir / "events.jsonl"
 
@@ -146,6 +203,53 @@ class RunArtifacts:
             "validation_accuracy": validation.get("accuracy"),
             "shortlist_rank": candidate.get("shortlist_rank"),
             "recovery_rank": candidate.get("recovery_rank"),
+        }
+
+    def save_frontier(self, frontier: Any) -> tuple[Path, Path]:
+        """Persist a Pareto frontier as JSON and a flat CSV table."""
+        payload = frontier.to_dict() if hasattr(frontier, "to_dict") else frontier
+        json_path = self.run_dir / "frontier.json"
+        self._write_json(json_path, payload)
+        csv_path = self.run_dir / "frontier.csv"
+        points = payload.get("points", []) if isinstance(payload, dict) else []
+        fieldnames = ["validation_accuracy", "parameter_count", "compression_ratio", "recovery_seconds", "seed", "run", "iteration"]
+        with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+            writer.writeheader()
+            for point in points:
+                writer.writerow({field: point.get(field) for field in fieldnames})
+        return json_path, csv_path
+
+    def save_manifest(self, manifest: Dict[str, Any]) -> Path:
+        path = self.run_dir / "manifest.json"
+        self._write_json(path, manifest)
+        return path
+
+    def measure_inference(self, model: torch.nn.Module, loader: Any, device: str = "cpu", warmup: int = 1) -> Dict[str, float]:
+        """Measure warm inference latency and throughput for a fixed loader."""
+        model = model.to(device)
+        model.eval()
+        iterator = iter(loader)
+        batches = []
+        for _ in range(max(1, warmup + 1)):
+            try:
+                batches.append(next(iterator))
+            except StopIteration:
+                break
+        if not batches:
+            raise ValueError("loader must contain at least one batch")
+        for data, _ in batches[:warmup]:
+            with torch.inference_mode():
+                model(data.to(device))
+        data, _ = batches[-1]
+        start = time.perf_counter()
+        with torch.inference_mode():
+            model(data.to(device))
+        elapsed = time.perf_counter() - start
+        batch_size = int(data.shape[0])
+        return {
+            "latency_seconds": float(elapsed),
+            "throughput_samples_per_second": float(batch_size / max(elapsed, 1e-12)),
         }
 
     def save_checkpoint(self, model: torch.nn.Module, name: str = "accepted_model.pth") -> Path:
