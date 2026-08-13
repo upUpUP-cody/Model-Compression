@@ -16,14 +16,14 @@ from src.recovery.reconstruction import ReconstructionRecovery
 from src.utils.data_loader import get_mnist_loaders
 
 
-def evaluate_model(model, test_loader, device='cpu'):
+def evaluate_model(model, validation_loader, device='cpu'):
     """快速评估模型准确率"""
     model.eval()
     correct = 0
     total = 0
 
     with torch.no_grad():
-        for data, target in test_loader:
+        for data, target in validation_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
             pred = output.argmax(dim=1, keepdim=True)
@@ -38,7 +38,7 @@ def prune_and_recover(
     original_model,
     prune_ratio,
     train_loader,
-    test_loader,
+    validation_loader,
     recovery_epochs=10,
     device='cpu'
 ):
@@ -69,7 +69,7 @@ def prune_and_recover(
     info = pruner.get_model_info()
 
     # 评估剪枝后模型（无恢复）
-    pruned_acc = evaluate_model(pruned_model, test_loader, device)
+    pruned_acc = evaluate_model(pruned_model, validation_loader, device)
 
     # Level 1 恢复
     recoverer = ReconstructionRecovery(
@@ -80,7 +80,7 @@ def prune_and_recover(
 
     history = recoverer.recover(
         train_loader=train_loader,
-        test_loader=test_loader,
+        validation_loader=validation_loader,
         epochs=recovery_epochs,
         verbose=False
     )
@@ -88,7 +88,7 @@ def prune_and_recover(
     return {
         'params': info['total_params'],
         'pruned_acc': pruned_acc,
-        'recovered_acc': history['best_test_acc'],
+        'recovered_acc': history['best_validation_accuracy'],
         'history': history
     }
 
@@ -102,7 +102,7 @@ def main():
 
     # 加载数据
     print("\n...")
-    train_loader, test_loader = get_mnist_loaders(batch_size=128, num_workers=0)
+    train_loader, validation_loader = get_mnist_loaders(batch_size=128, num_workers=0)
 
     # 加载训练好的模型
     print("...")
@@ -113,7 +113,7 @@ def main():
 
     # 评估原始模型
     print("...")
-    original_acc = evaluate_model(model, test_loader, device)
+    original_acc = evaluate_model(model, validation_loader, device)
     original_params = sum(p.numel() for p in model.parameters())
 
     print(f"  : {original_acc:.2f}%")
@@ -137,7 +137,7 @@ def main():
             original_model=model,
             prune_ratio=prune_ratio,
             train_loader=train_loader,
-            test_loader=test_loader,
+            validation_loader=validation_loader,
             recovery_epochs=recovery_epochs,
             device=device
         )

@@ -67,4 +67,4 @@ _, history = quick_recovery(
 )
 
 print(f"\n[SUCCESS] Test passed!")
-print(f"  Best accuracy: {history['best_test_acc']:.2f}%")
+print(f"  Best accuracy: {history['best_validation_accuracy']:.2f}%")

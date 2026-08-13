@@ -348,7 +348,7 @@ class LotteryTicketProposer:
             )
 
             # 获取最佳测试准确率
-            recovered_acc = history['best_test_acc']
+            recovered_acc = history['best_validation_accuracy']
 
             if verbose:
                 print(f"  After recovery: {recovered_acc:.2f}% (+{recovered_acc - pruned_acc:.2f}%)")

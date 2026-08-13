@@ -101,7 +101,7 @@ class FrontierProfiler:
                     device=self.device,
                     verbose=False
                 )
-                recovered_acc = history['best_test_acc']
+                recovered_acc = history['best_validation_accuracy']
                 if verbose:
                     print(f"  After recovery: {recovered_acc:.2f}% (+{recovered_acc - pruned_acc:.2f}%)")
             else:

@@ -54,7 +54,7 @@ def importance(model, loader, device):
 
 
 def recovery(model, train_loader, validation_loader, **kwargs):
-    return model, {"best_test_acc": 90.0}
+    return model, {"best_validation_accuracy": 90.0}
 
 
 def test_candidate_fingerprint_is_order_independent():
