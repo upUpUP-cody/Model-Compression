@@ -1,0 +1,46 @@
+model:
+  type: resnet_cifar
+  num_classes: 10
+  base_width: 64
+dataset:
+  name: cifar10
+  data_dir: ./data
+  batch_size: 128
+  num_workers: 2
+  pin_memory: true
+  persistent_workers: false
+  validation_fraction: 0.1
+  split_seed: 42
+hardware:
+  device: cuda:0
+  precision: fp16
+  mixed_precision: true
+  deterministic: true
+  cudnn_benchmark: false
+  tf32: false
+  cpu_threads: 1
+training:
+  epochs: 20
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  save_path: checkpoints/cifar_resnet18_baseline.pth
+controller:
+  max_accuracy_drop_points: 100.0
+  max_failures: 3
+  min_quality_score: 0.0
+  regrow_ratio_multiplier: 0.8
+search:
+  max_iterations: 1
+  candidates_per_round: 1
+  candidate_ratios: [0.3]
+  cheap_eval_samples: 64
+  cheap_eval_samples: 64
+recovery:
+  level: 1
+  epochs: 0
+  learning_rate: 0.001
+logging:
+  output_root: results/cifar_baseline
+  use_wandb: false
+run_label: cifar_resnet_baseline_gpu
+seed: 42

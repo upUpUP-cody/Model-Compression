@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -27,13 +28,25 @@ def test_cpu_config_loads_and_rejects_unavailable_cuda_and_cpu_amp():
 
     invalid = json.loads(json.dumps(config))
     invalid["hardware"]["device"] = "cuda"
-    with pytest.raises(ValueError, match="invalid hardware configuration"):
-        validate_config(invalid)
+    with patch("torch.cuda.is_available", return_value=False):
+        with pytest.raises(ValueError, match="invalid hardware configuration"):
+            validate_config(invalid)
 
     invalid["hardware"]["device"] = "cpu"
     invalid["hardware"]["mixed_precision"] = True
     with pytest.raises(ValueError, match="mixed_precision"):
         validate_config(invalid)
+
+
+def test_gpu_config_passes_validation_when_cuda_is_available():
+    config = load_config(CONFIG_PATH)
+    gpu_config = json.loads(json.dumps(config))
+    gpu_config["hardware"]["device"] = "cuda:0"
+    gpu_config["hardware"]["mixed_precision"] = False
+    gpu_config["hardware"]["precision"] = "fp32"
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable on this host")
+    validate_config(gpu_config)
 
 
 def test_set_seed_reproduces_python_numpy_and_torch_values():

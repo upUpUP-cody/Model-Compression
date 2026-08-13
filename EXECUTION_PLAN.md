@@ -5,10 +5,12 @@
 ## 当前状态
 
 - 已完成：CPU-first MNIST MLP 自主结构化剪枝 MVP，提交为 `e40ca88`。
-- 已完成：物理结构化剪枝、Cheap Critic、基础启发式控制器、自主搜索循环、CPU YAML 配置、实验产物记录和合成数据测试。
-- 历史验证：提交前曾运行 `python -m pytest tests -q`，结果为 `46 passed`。后续修改前后均需重新运行测试，历史结果不代表当前工作区状态。
-- 当前边界：实现仅面向顺序 MLP；不支持残差连接、分支、共享层、CNN、Transformer 或 GPU 工作流。
-- 当前研究缺口：Wanda 分数尚未明确驱动实际保留神经元索引；候选审计、rollback 语义、最佳恢复权重、规范 Pareto frontier 和 train/validation/test 隔离仍需加固。
+- 已完成：物理结构化剪枝、Cheap Critic、基础启发式控制器、自主搜索循环、CPU/GPU YAML 配置、实验产物记录和合成数据测试。
+- 已完成：MNIST P1.2 GPU smoke/formal study（RTX 4090）、多 seed 对照与 6 档压缩率扫描聚合。
+- **进行中：P2 CIFAR-10 + ResNet GPU 扩展**（详见 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md)）。
+- 历史验证：提交前曾运行 `python -m pytest tests -q`；P2 代码交付后需重新全量验证。
+- 当前边界：MNIST 路径保持 MLP-only；CIFAR/ResNet 结构化剪枝、P1.2 协议、LoRA/自蒸馏恢复已在 P2 分支实现中。
+- Qwen/SQuAD 论文实验仍为规划项，未启动实现。
 
 ## 研究协议
 
@@ -35,9 +37,9 @@
 
 这些模块构成可运行 MVP，不构成 Wanda 驱动搜索有效性或论文结果的证据。
 
-## P0：搜索正确性与审计链路
+## P0：搜索正确性与审计链路（已完成）
 
-完成门槛：Wanda 必须可验证地决定物理剪枝，所有候选和状态转换可审计，且恢复和 rollback 的返回模型确定无歧义。
+> 以下条目已在 MNIST MLP 上验收通过；CIFAR 迁移见 P2.3。
 
 ### P0.1 Wanda 到物理保留索引
 
@@ -86,7 +88,9 @@
 
 验收：覆盖支配、重复、同参数、单点、空点和非排序输入；frontier archive 可 JSON 序列化。
 
-## P1：可复现 CPU MNIST 实验协议
+## P1：可复现 CPU/GPU MNIST 实验协议（已完成）
+
+> MNIST P1.2 GPU 统计补全（multiseed + sweep + aggregate）已完成。CIFAR 对照见 P2.4。
 
 完成门槛：每次结果均可追溯到数据切分、配置、基线、候选历史、frontier 和最终一次 test 评估。
 
@@ -110,22 +114,28 @@
 
 验收：同 seed 的 split 和关键 smoke 输出可复现；test 不参与搜索；三 seed 汇总可完整追溯。
 
-## P2：GPU 与架构扩展
+## P2：GPU 与架构扩展（进行中）
 
-仅在 P0 和 P1 完成后开始。
+> 详细步骤、命令与时长估算见 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md)
 
-1. 先将冻结的搜索语义迁移至 CIFAR-10 和小型 ResNet；CNN 必须实现显式结构依赖，不能套用当前顺序 MLP 的模块枚举逻辑。
-2. 增加 GPU device policy、CUDA 确定性设置、吞吐和显存指标、候选并行评估及可选 mixed precision。
-3. 将 LoRA 和 self-distillation 作为独立 recovery 接口接入同一 train/validation/test、artifact 和 frontier 协议，并做消融研究。
-4. 仅在 CIFAR-10 协议稳定后规划 Qwen/SQuAD 和论文 E1-E3；Transformer 剪枝单位和任务指标必须单独设计。
+### P2.1 CIFAR-10 数据与 ResNet 基线 [进行中]
+### P2.2 CNN 结构化剪枝 [进行中]
+### P2.3 Wanda/搜索 CNN 迁移 [进行中]
+### P2.4 CIFAR P1.2 GPU 协议 [进行中]
+### P2.5 GPU 吞吐/显存/并行 [进行中]
+### P2.6 LoRA 恢复 [进行中]
+### P2.7 自蒸馏恢复 [进行中]
+### P2.8 恢复消融 [进行中]
+### P2.9 Qwen/SQuAD [planned only]
 
 ## 执行顺序与全局验收
 
-1. 完成本轮文档收敛。
-2. 完成 P0.1、P0.2、P0.3 的代码和针对性测试。
-3. 接入规范 Pareto archive，迁移或弃用旧 frontier/proposal 逻辑。
-4. 固化 MNIST 数据切分、配置和 artifact manifest，完成 smoke 和单 seed 验证。
-5. 执行三 seed CPU 对照研究，产出可复核的压缩、accuracy 和成本结果。
-6. 只有在全量测试通过、Wanda 索引真正用于物理剪枝、rollback 可恢复并终止、frontier 是可验证 Pareto 集、无 test 泄漏且已有三 seed 汇总后，才进入 GPU 阶段。
+1. 完成 P2 文档与 CIFAR 数据/ResNet 基线（P2.1）。
+2. 完成 CNN 结构化剪枝与单测（P2.2）。
+3. 完成 Wanda/search backend 迁移，确保 MNIST 测试不退化（P2.3）。
+4. 运行 CIFAR P1.2 smoke → formal → multiseed → sweep（P2.4）。
+5. 写入 manifest GPU benchmark 指标（P2.5）。
+6. CIFAR 协议稳定后，完成 LoRA/自蒸馏恢复与消融（P2.6–P2.8）。
+7. Qwen/SQuAD 仅作规划占位（P2.9）。
 
 每个功能修改后运行对应 pytest 文件；阶段结束运行 `python -m pytest tests -q`。任何真实 MNIST 长实验开始前，先确认数据集、基线检查点、配置和输出目录，并按本文件的运行约束向用户报告预计时长和产物路径。

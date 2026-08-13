@@ -97,6 +97,20 @@ def make_frozen_study(tmp_path, config):
     return checkpoint_source, study, manifest
 
 
+def test_dense_small_trains_when_recovery_epochs_are_positive():
+    config = make_config()
+    config["comparison"]["recovery_epochs"] = 2
+    untrained_config = make_config()
+    untrained_config["comparison"]["recovery_epochs"] = 0
+
+    untrained_results, _ = run_comparison(make_model(), make_loader(), make_loader(), untrained_config)
+    trained_results, _ = run_comparison(make_model(), make_loader(), make_loader(), config)
+
+    assert trained_results["dense_small"].validation["accuracy"] > untrained_results["dense_small"].validation["accuracy"]
+    assert trained_results["dense_small"].details.get("from_scratch") is True
+    assert trained_results["dense_small"].recovery_seconds > 0.0
+
+
 def test_all_comparison_arms_are_validation_only_and_isolate_source_model():
     source = make_model()
     source_state = copy.deepcopy(source.state_dict())

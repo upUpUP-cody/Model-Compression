@@ -4,7 +4,7 @@
 """
 import torch
 import torch.nn as nn
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Sequence, Tuple
 from torch.utils.data import DataLoader
 
 from src.utils.device import resolve_device
@@ -102,12 +102,82 @@ class SensitivityAnalyzer:
 
         return sensitivity_scores
 
+    def compute_conv_wanda_importance(
+        self,
+        dataloader: DataLoader,
+        layer_names: Sequence[str],
+        num_batches: int = 10,
+    ) -> Dict[str, torch.Tensor]:
+        """Compute per-output-channel Wanda scores for named Conv2d layers."""
+        if isinstance(num_batches, bool) or not isinstance(num_batches, int) or num_batches <= 0:
+            raise ValueError("num_batches must be a positive integer")
+        if not layer_names:
+            raise ValueError("layer_names must not be empty")
+
+        conv_layers: List[Tuple[str, nn.Conv2d]] = []
+        for name in layer_names:
+            module = self._get_module_by_name(name)
+            if not isinstance(module, nn.Conv2d):
+                raise ValueError(f"Layer {name} is not Conv2d")
+            conv_layers.append((name, module))
+
+        activation_sums: Dict[str, torch.Tensor] = {}
+        activation_counts: Dict[str, int] = {}
+        hooks = []
+        was_training = self.model.training
+
+        def get_activation(name: str):
+            def hook(_module: nn.Module, _inputs: Tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
+                values = output.detach().abs()
+                if values.ndim != 4:
+                    raise ValueError(f"Conv layer {name} must produce four-dimensional activations")
+                batch_sum = values.sum(dim=(0, 2, 3))
+                if name not in activation_sums:
+                    activation_sums[name] = batch_sum.clone()
+                    activation_counts[name] = int(values.shape[0])
+                else:
+                    activation_sums[name].add_(batch_sum)
+                    activation_counts[name] += int(values.shape[0])
+            return hook
+
+        self.model.eval()
+        try:
+            for name, module in conv_layers:
+                hooks.append(module.register_forward_hook(get_activation(name)))
+
+            batch_count = 0
+            with torch.inference_mode():
+                for data, _target in dataloader:
+                    if batch_count >= num_batches:
+                        break
+                    self.model(data.to(self.device, non_blocking=self.non_blocking))
+                    batch_count += 1
+
+            if batch_count == 0:
+                raise ValueError("dataloader must yield at least one batch")
+
+            wanda_scores = {}
+            for name, module in conv_layers:
+                if name not in activation_sums or activation_counts[name] == 0:
+                    raise ValueError(f"No activations collected for Conv layer {name}")
+                average_activation = activation_sums[name] / activation_counts[name]
+                weight_magnitude = torch.norm(module.weight.detach(), p=2, dim=(1, 2, 3))
+                wanda_scores[name] = (weight_magnitude * average_activation).detach()
+            return wanda_scores
+        finally:
+            for hook in hooks:
+                hook.remove()
+            self.model.train(was_training)
+
     def compute_wanda_importance(
         self,
         dataloader: DataLoader,
         num_batches: int = 10,
+        layer_names: Optional[Sequence[str]] = None,
     ) -> Dict[str, torch.Tensor]:
-        """Compute hidden-Linear Wanda scores in one streaming data pass."""
+        """Compute Wanda scores for hidden Linear layers or named Conv2d layers."""
+        if layer_names is not None:
+            return self.compute_conv_wanda_importance(dataloader, layer_names, num_batches)
         if isinstance(num_batches, bool) or not isinstance(num_batches, int) or num_batches <= 0:
             raise ValueError("num_batches must be a positive integer")
 

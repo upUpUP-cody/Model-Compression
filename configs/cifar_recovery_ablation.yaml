@@ -1,0 +1,51 @@
+model:
+  type: resnet_cifar
+  num_classes: 10
+  base_width: 64
+dataset:
+  name: cifar10
+  data_dir: ./data
+  batch_size: 64
+  num_workers: 0
+  pin_memory: false
+  persistent_workers: false
+  validation_fraction: 0.1
+  split_seed: 42
+hardware:
+  device: cpu
+  precision: fp32
+  mixed_precision: false
+  deterministic: true
+  cpu_threads: 1
+controller:
+  max_accuracy_drop_points: 100.0
+  max_failures: 3
+  min_quality_score: 0.0
+  regrow_ratio_multiplier: 0.8
+search:
+  max_iterations: 1
+  candidates_per_round: 1
+  candidate_ratios: [0.3]
+  cheap_eval_samples: 32
+recovery:
+  level: 1
+  epochs: 1
+  learning_rate: 0.001
+  lora_rank: 2
+  lora_alpha: 4.0
+  distill_temperature: 2.0
+  distill_alpha: 0.5
+comparison:
+  methods: [oneshot_wanda]
+  target_compression_ratio: 1.5
+  oneshot_layer_ratios:
+    layer1.0.conv1: 0.3
+  wanda_batches: 1
+  recovery_epochs: 1
+  recovery_learning_rate: 0.001
+  recovery_levels: [1, 2, 3]
+logging:
+  output_root: results/cifar_recovery_ablation
+  use_wandb: false
+run_label: cifar_recovery_ablation
+seed: 42

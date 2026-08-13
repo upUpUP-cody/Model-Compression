@@ -54,4 +54,41 @@ python experiments/run_p12_comparison.py report-test --config configs/mnist_p12_
 
 ## 后续阶段
 
-P1.2 seed=42 不构成统计结论。下一次代码交付应先实现多 seed、真实压缩率扫描及 mean/std/Pareto 聚合；CIFAR/ResNet、LoRA、自蒸馏和 Qwen/SQuAD 必须在相应源码、配置和测试实际交付后再启动，不得把现有 MNIST runner 当作这些实验的入口。
+P1.2 seed=42 不构成统计结论；MNIST multiseed/sweep 聚合已完成。
+
+**P2 CIFAR GPU 工作流**（详见 [docs/P2_EXECUTION_PLAN.md](P2_EXECUTION_PLAN.md)）：
+
+```bash
+# 环境
+source venv/bin/activate
+export PYTHONPATH=/root/Model-Compression
+
+# 1. 训练 CIFAR ResNet 基线
+./scripts/run_gpu.sh python experiments/exp_cifar_baseline.py --config configs/cifar_resnet_baseline_gpu.yaml
+
+# 2. CIFAR P1.2 smoke + report-test
+./scripts/run_gpu.sh python experiments/run_cifar_p12_comparison.py study \
+  --config configs/cifar_p12_gpu_smoke.yaml \
+  --checkpoint checkpoints/cifar_resnet18_baseline.pth
+
+./scripts/run_gpu.sh python experiments/run_cifar_p12_comparison.py report-test \
+  --config configs/cifar_p12_gpu_smoke.yaml \
+  --checkpoint checkpoints/cifar_resnet18_baseline.pth \
+  --study-dir <SMOKE_STUDY_DIR>
+
+# 3. multiseed / sweep
+./scripts/run_gpu.sh python experiments/run_cifar_p12_multiseed.py \
+  --config configs/cifar_p12_gpu_multiseed.yaml \
+  --checkpoint checkpoints/cifar_resnet18_baseline.pth
+
+# 4. 恢复消融
+./scripts/run_gpu.sh python experiments/run_cifar_recovery_ablation.py \
+  --config configs/cifar_recovery_ablation.yaml \
+  --checkpoint checkpoints/cifar_resnet18_baseline.pth
+```
+
+CIFAR 输出根目录与 MNIST 分离（`results/cifar_p12_comparison_gpu_*`）。预计超过五分钟的实验启动后须立即报告实验名、时长与输出目录。
+
+## MNIST 归档参考
+
+以下为已完成 MNIST P1.2 GPU 流程，供对照，不应覆盖已冻结 study 目录。

@@ -2,11 +2,11 @@
 
 > 本文件是项目的完整长期路线图、阶段目标和全局成功标准。当前 P0/P1/P2 的执行顺序、研究协议和阶段验收条件见 [EXECUTION_PLAN.md](EXECUTION_PLAN.md)。
 >
-> 更新状态：[完成] MVP 核心流程已完成并通过自动化测试；MNIST CPU 冒烟实验已完成。论文级实验、LoRA/自蒸馏恢复和 GPU 扩展仍未实施。
+> 更新状态：[完成] MVP 核心流程已完成并通过自动化测试；MNIST CPU 冒烟实验已完成；MNIST P1.2 GPU smoke/formal 与多 seed/压缩率扫描已完成。论文级 LLM 实验、LoRA/自蒸馏恢复和 CIFAR/ResNet 扩展仍未实施。
 >
-> 最近验证：`python -m pytest tests -q` -> `46 passed`。
+> 最近验证：`python -m pytest tests -q` -> `96 passed, 1 skipped`。
 >
-> 冒烟产物：`results/autonomous_search_smoke/autonomous_search_20260812_235904/`。
+> GPU 产物：`results/p12_comparison_gpu_sweep/`（6 压缩率 x 3 seed）、`results/p12_comparison_gpu_multiseed/`。
 
 ## 项目概述
 

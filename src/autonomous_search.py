@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from src.controller.heuristic_controller import CandidateProfile, HeuristicController
 from src.evaluation.cheap_critic import CheapCritic, CheapCriticResult
 from src.evaluation.frontier import ParetoFrontier, FrontierPoint
+from src.pruning.pruning_backend import MlpBackend, PruningBackend, resolve_pruning_backend
 from src.pruning.sensitivity import SensitivityAnalyzer
 from src.pruning.structured_pruning import StructuredPruning
 from src.recovery.reconstruction import quick_recovery
@@ -136,12 +137,16 @@ class AutonomousSearch:
         recovery_fn: Callable[..., Tuple[nn.Module, Dict[str, Any]]] = quick_recovery,
         evaluator: Callable[[nn.Module, DataLoader, str], Dict[str, float]] = full_evaluate,
         importance_fn: Optional[Callable[[nn.Module, DataLoader, str], Dict[str, torch.Tensor]]] = None,
+        pruning_backend: Optional[PruningBackend] = None,
+        model_type: str = "mlp",
     ) -> None:
         self.controller = controller
         self.critic = critic if critic is not None else CheapCritic()
         self.recovery_fn = recovery_fn
         self.evaluator = evaluator
-        self.importance_fn = importance_fn or self._wanda_importance
+        self.pruning_backend = pruning_backend
+        self.model_type = model_type
+        self.importance_fn = importance_fn or self._default_importance_fn
 
     def run(
         self,
@@ -182,7 +187,8 @@ class AutonomousSearch:
 
         for iteration in range(max_iterations):
             history.ratio_multiplier = ratio_multiplier
-            importance = self.importance_fn(current_model, train_loader, device)
+            backend = self._backend_for_model(current_model)
+            importance = self._call_importance_fn(current_model, train_loader, device, backend)
             candidates = self._generate_candidates(
                 current_model,
                 importance,
@@ -191,6 +197,7 @@ class AutonomousSearch:
                 attempted=history.attempted_fingerprints,
                 limit=None,
                 enable_two_layer_candidates=enable_two_layer_candidates,
+                backend=backend,
             )
             if not candidates:
                 history.add_event({"iteration": iteration, "action": "stop", "reason": "no_new_candidates"})
@@ -209,7 +216,7 @@ class AutonomousSearch:
                     "audit_status": "generated",
                 }
                 try:
-                    candidate_model = StructuredPruning(current_model).create_pruned_model_by_indices(
+                    candidate_model = backend.create_pruned_model_by_indices(
                         spec.keep_indices_dict()
                     ).to(resolved_device)
                     actual_count = _parameter_count(candidate_model)
@@ -342,13 +349,35 @@ class AutonomousSearch:
 
         return current_model, history
 
-    @staticmethod
-    def _wanda_importance(
-        model: nn.Module, dataloader: DataLoader, device: str
+    def _backend_for_model(self, model: nn.Module) -> PruningBackend:
+        if self.pruning_backend is not None:
+            return self.pruning_backend
+        return resolve_pruning_backend(model, self.model_type)
+
+    def _call_importance_fn(
+        self,
+        model: nn.Module,
+        dataloader: DataLoader,
+        device: str,
+        backend: PruningBackend,
     ) -> Dict[str, torch.Tensor]:
-        return SensitivityAnalyzer(model, device=device).compute_wanda_importance(
-            dataloader, num_batches=1
-        )
+        try:
+            return self.importance_fn(model, dataloader, device, backend)
+        except TypeError:
+            return self.importance_fn(model, dataloader, device)
+
+    def _default_importance_fn(
+        self,
+        model: nn.Module,
+        dataloader: DataLoader,
+        device: str,
+        backend: PruningBackend,
+    ) -> Dict[str, torch.Tensor]:
+        analyzer = SensitivityAnalyzer(model, device=device)
+        layer_names = backend.prunable_layer_names()
+        if isinstance(backend, MlpBackend):
+            return analyzer.compute_wanda_importance(dataloader, num_batches=1)
+        return analyzer.compute_wanda_importance(dataloader, num_batches=1, layer_names=layer_names)
 
     @staticmethod
     def _generate_candidates(
@@ -359,28 +388,31 @@ class AutonomousSearch:
         limit: Optional[int],
         attempted: set[str],
         enable_two_layer_candidates: bool = False,
+        backend: Optional[PruningBackend] = None,
     ) -> List[CandidateSpec]:
-        pruner = StructuredPruning(model)
+        backend = backend or resolve_pruning_backend(model)
         parent_parameter_count = _parameter_count(model)
         candidates = []
         layer_candidates = {}
-        for layer_name in pruner._hidden_linear_layer_names():
+        for layer_name in backend.prunable_layer_names():
             scores = importance.get(layer_name)
             if scores is None:
                 continue
-            layer = pruner._validate_hidden_linear(layer_name)
             if not isinstance(scores, torch.Tensor) or scores.ndim != 1:
                 raise ValueError(f"importance scores for {layer_name} must be a one-dimensional tensor")
-            if scores.numel() != layer.out_features:
+            output_size = backend.output_size(layer_name)
+            if scores.numel() != output_size:
                 continue
-            scores = pruner._validate_importance_scores(layer, scores)
+            scores = scores.detach().reshape(-1).cpu()
+            if not torch.isfinite(scores).all().item():
+                raise ValueError(f"importance scores for {layer_name} must be finite")
             for ratio in ratios:
                 adjusted_ratio = min(float(ratio) * multiplier, 0.99)
                 if not 0.0 < adjusted_ratio < 1.0:
                     continue
-                num_keep = max(1, int(layer.out_features * (1.0 - adjusted_ratio)))
+                num_keep = max(1, int(output_size * (1.0 - adjusted_ratio)))
                 ranked_indices = sorted(
-                    range(layer.out_features), key=lambda index: (-float(scores[index]), index)
+                    range(output_size), key=lambda index: (-float(scores[index]), index)
                 )
                 keep_indices = sorted(ranked_indices[:num_keep])
                 spec = CandidateSpec.create(

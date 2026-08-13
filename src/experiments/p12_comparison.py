@@ -122,9 +122,14 @@ def run_method(
         details: Dict[str, Any] = {}
         recovery_seconds = 0.0
     elif method == "dense_small":
-        model = _build_dense_small(source_model, comparison, device)
-        details = {"hidden_dims": list(getattr(model, "hidden_dims", ())) }
-        recovery_seconds = 0.0
+        model, details, recovery_seconds = _train_dense_small(
+            source_model,
+            train_loader,
+            validation_loader,
+            comparison,
+            device,
+            str(config["hardware"].get("precision", "fp32")),
+        )
     elif method in {"oneshot_magnitude", "oneshot_wanda"}:
         importance_method = "magnitude" if method == "oneshot_magnitude" else "wanda"
         model, details = _oneshot_structured(
@@ -176,6 +181,41 @@ def _build_dense_small(source_model: nn.Module, comparison: Mapping[str, Any], d
     except AttributeError as error:
         raise ValueError("dense_small requires an MLP-compatible source model") from error
     return model.to(device)
+
+
+def _train_dense_small(
+    source_model: nn.Module,
+    train_loader: DataLoader,
+    validation_loader: DataLoader,
+    comparison: Mapping[str, Any],
+    device: str,
+    precision: str,
+) -> tuple[nn.Module, Dict[str, Any], float]:
+    """Train a smaller dense model from scratch on the train split."""
+    model = _build_dense_small(source_model, comparison, device)
+    epochs = int(comparison.get("recovery_epochs", 0))
+    learning_rate = float(comparison.get("recovery_learning_rate", 0.001))
+    start = time.perf_counter()
+    history: Dict[str, Any] = {}
+    if epochs > 0:
+        model, history = quick_recovery(
+            model,
+            train_loader,
+            validation_loader,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            device=device,
+            precision=precision,
+            verbose=False,
+        )
+    recovery_seconds = time.perf_counter() - start
+    details = {
+        "hidden_dims": list(getattr(model, "hidden_dims", ())),
+        "from_scratch": True,
+        "training_epochs": epochs,
+        "training": history,
+    }
+    return model, details, recovery_seconds
 
 
 def _dropout_rate(model: nn.Module) -> float:
