@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 
 from src.controller.heuristic_controller import CandidateProfile, HeuristicController
 from src.evaluation.cheap_critic import CheapCritic, CheapCriticResult
+from src.evaluation.frontier import ParetoFrontier, FrontierPoint
 from src.pruning.sensitivity import SensitivityAnalyzer
 from src.pruning.structured_pruning import StructuredPruning
 from src.recovery.reconstruction import quick_recovery
@@ -90,6 +91,8 @@ class SearchHistory:
     attempted_fingerprints: set[str] = field(default_factory=set, repr=False)
     consecutive_failures: int = 0
     ratio_multiplier: float = 1.0
+    frontier_points: List[Dict[str, Any]] = field(default_factory=list)
+    initial_parameter_count: int = 0
 
     def add_event(self, event: Dict[str, Any]) -> None:
         self.events.append(event)
@@ -100,6 +103,8 @@ class SearchHistory:
             "accepted_parameter_count": int(self.accepted_parameter_count),
             "consecutive_failures": int(self.consecutive_failures),
             "ratio_multiplier": float(self.ratio_multiplier),
+            "frontier_points": self.frontier_points,
+            "initial_parameter_count": int(self.initial_parameter_count),
             "events": self.events,
         }
 
@@ -152,6 +157,7 @@ class AutonomousSearch:
         device: str = "cpu",
         enable_two_layer_candidates: bool = False,
         recovery_top_k: int = 1,
+        frontier_archive: Optional[ParetoFrontier] = None,
     ) -> Tuple[nn.Module, SearchHistory]:
         if max_iterations < 1 or candidates_per_round < 1 or recovery_epochs < 0:
             raise ValueError("iteration, candidate, and recovery limits must be valid")
@@ -166,6 +172,7 @@ class AutonomousSearch:
         history = SearchHistory(
             baseline_accuracy=float(baseline["accuracy"]),
             accepted_parameter_count=_parameter_count(current_model),
+            initial_parameter_count=_parameter_count(current_model),
         )
         ratio_multiplier = 1.0
         accepted_snapshot = copy.deepcopy(current_model)
@@ -280,6 +287,18 @@ class AutonomousSearch:
                     device=device, verbose=False,
                 )
                 validation = self.evaluator(recovered_model, validation_loader, device)
+                best_record["recovery"] = _json_safe(recovery_history)
+                best_record["validation"] = validation
+                if frontier_archive is not None:
+                    frontier_point = FrontierPoint(
+                        validation_accuracy=validation["accuracy"],
+                        parameter_count=_parameter_count(recovered_model),
+                        compression_ratio=history.initial_parameter_count / _parameter_count(recovered_model),
+                        candidate_spec=best_spec.to_dict(),
+                        iteration=iteration,
+                    )
+                    frontier_archive.add(frontier_point)
+                    history.frontier_points = [point.to_dict() for point in frontier_archive.points]
                 accepted = (
                     validation["accuracy"] >= history.baseline_accuracy - self.controller.max_accuracy_drop_points
                     and _parameter_count(recovered_model) < history.accepted_parameter_count

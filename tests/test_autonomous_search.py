@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from src.autonomous_search import AutonomousSearch, CandidateSpec, candidate_fingerprint
 from src.controller.heuristic_controller import HeuristicController
 from src.evaluation.cheap_critic import CheapCriticResult
+from src.evaluation.frontier import ParetoFrontier
 from src.models.dense_baseline import MLP
 
 
@@ -196,6 +197,41 @@ def test_search_physically_uses_wanda_indices_and_records_candidate_spec():
         parameter.numel() for parameter in accepted.parameters()
     )
     json.dumps(history.to_dict())
+
+
+def test_search_records_all_full_validation_results_in_frontier_archive():
+    source = make_model()
+    archive = ParetoFrontier()
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=5.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=importance,
+        recovery_fn=recovery,
+    )
+
+    _, history = search.run(
+        source,
+        make_loader(),
+        make_loader(),
+        max_iterations=1,
+        candidate_ratios=(0.5,),
+        candidates_per_round=1,
+        cheap_eval_samples=5,
+        recovery_epochs=0,
+        frontier_archive=archive,
+    )
+
+    assert len(archive) == 1
+    frontier_point = archive.points[0]
+    assert frontier_point.validation_accuracy == 90.0
+    assert frontier_point.parameter_count == history.accepted_parameter_count
+    assert frontier_point.compression_ratio == source_parameter_count(source) / history.accepted_parameter_count
+    assert history.frontier_points == archive.to_dict()["points"]
+
+
+def source_parameter_count(model):
+    return sum(parameter.numel() for parameter in model.parameters())
 
 
 def test_candidate_spec_is_immutable_and_fingerprint_includes_indices():
