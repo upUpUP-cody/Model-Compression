@@ -7,6 +7,8 @@ import torch.nn as nn
 from typing import Dict, List, Tuple, Optional
 from torch.utils.data import DataLoader
 
+from src.utils.device import resolve_device
+
 
 class SensitivityAnalyzer:
     """
@@ -20,9 +22,9 @@ class SensitivityAnalyzer:
             model: 待分析的模型
             device: 计算设备
         """
-        self.model = model
-        self.device = device
-        self.model.to(device)
+        self.device = resolve_device(device)
+        self.non_blocking = self.device.type == "cuda"
+        self.model = model.to(self.device)
 
     def compute_gradient_sensitivity(
         self,
@@ -57,7 +59,8 @@ class SensitivityAnalyzer:
             if batch_count >= num_batches:
                 break
 
-            data, target = data.to(self.device), target.to(self.device)
+            data = data.to(self.device, non_blocking=self.non_blocking)
+            target = target.to(self.device, non_blocking=self.non_blocking)
 
             # 前向传播
             self.model.zero_grad()
@@ -146,7 +149,7 @@ class SensitivityAnalyzer:
                 for data, _target in dataloader:
                     if batch_count >= num_batches:
                         break
-                    self.model(data.to(self.device))
+                    self.model(data.to(self.device, non_blocking=self.non_blocking))
                     batch_count += 1
 
             if batch_count == 0:

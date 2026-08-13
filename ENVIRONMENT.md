@@ -1,65 +1,39 @@
-# 环境配置信息
+# Environment
 
-## Python 环境
-- **Python 版本**: 3.11.9
-- **pip 版本**: 24.0
+## Current CPU development host
 
-## 核心依赖
+The current workstation is used for CPU regression tests and code development. CUDA validation has not been performed here and must not be reported as complete.
 
-### 深度学习框架
-- PyTorch: 2.13.0 (CPU)
-- TorchVision: 0.28.0
-- TorchAudio: 2.11.0
-
-### Transformer 生态
-- Transformers: 5.15.0
-- Datasets: 5.0.1
-- Tokenizers: 0.22.2
-- Accelerate: 1.14.0
-- BitsAndBytes: 0.50.0
-
-### 数据处理
-- NumPy: 2.4.6
-- Pandas: 3.0.5
-- SciPy: 1.17.1
-
-### 可视化
-- Matplotlib: 3.11.1
-- Seaborn: 0.13.2
-- Plotly: 6.9.0
-
-### 实验管理
-- WandB: 0.28.1
-- TensorBoard: 2.21.0
-
-### 配置管理
-- PyYAML: 6.0.3
-- OmegaConf: 2.3.1
-
-### 开发工具
-- pytest: 9.1.1
-- pytest-cov: 7.1.0
-- Black: 26.5.1
-- Flake8: 7.3.0
-- isort: 8.0.1
-
-## 硬件环境
-- **CUDA**: 不可用
-- **训练设备**: CPU only
-
-## 验证脚本
-1. `check_environment.py` - 完整环境验证
-2. `test_imports.py` - 快速导入测试
-3. `check_gpu.py` - GPU/CUDA 检测
-
-## 安装说明
 ```bash
-# 安装所有依赖
 pip install -r requirements.txt
-
-# 验证环境
-python check_environment.py
+python -m pytest tests -q
 ```
 
----
-*最后更新: 2026-08-11*
+## CUDA host setup
+
+On the new NVIDIA GPU host, first confirm the driver:
+
+```bash
+nvidia-smi
+```
+
+Create an isolated environment, install the generic project dependencies, then install the PyTorch CUDA wheel that matches the driver and PyTorch compatibility matrix. Example only for CUDA 12.6:
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+python scripts/check_gpu.py --device cuda:0 --precision fp16
+```
+
+`requirements-gpu.txt` records the required installation sequence but does not pin a wheel index because the correct index depends on the target driver.
+
+See [docs/GPU_WORKFLOW.md](docs/GPU_WORKFLOW.md) for the required smoke, frozen report-test, and formal-study sequence. Do not run a GPU config on CPU as a fallback.
+
+## Core constraints
+
+- Python `print()` messages must use ASCII-only text because Windows GBK terminals can fail on emoji.
+- Keep datasets, checkpoint files, results, caches, and local `.claude/settings.json` outside commits.
+- GPU smoke and formal study use independent output roots and must not overwrite CPU artifacts.

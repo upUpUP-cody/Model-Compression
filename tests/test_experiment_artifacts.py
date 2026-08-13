@@ -20,14 +20,14 @@ from src.utils.search_visualization import plot_search_history
 CONFIG_PATH = Path("configs/mnist_mlp_autonomous_cpu.yaml")
 
 
-def test_cpu_config_loads_and_rejects_unsupported_hardware():
+def test_cpu_config_loads_and_rejects_unavailable_cuda_and_cpu_amp():
     config = load_config(CONFIG_PATH)
     assert config["hardware"]["device"] == "cpu"
     assert config["hardware"]["mixed_precision"] is False
 
     invalid = json.loads(json.dumps(config))
     invalid["hardware"]["device"] = "cuda"
-    with pytest.raises(ValueError, match="only device: cpu"):
+    with pytest.raises(ValueError, match="invalid hardware configuration"):
         validate_config(invalid)
 
     invalid["hardware"]["device"] = "cpu"

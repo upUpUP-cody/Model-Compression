@@ -1,0 +1,59 @@
+model:
+  input_dim: 784
+  hidden_dims: [512, 256, 128]
+  num_classes: 10
+  dropout_rate: 0.2
+  use_batch_norm: true
+dataset:
+  name: mnist
+  data_dir: ./data/mnist
+  batch_size: 128
+  num_workers: 2
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+  validation_fraction: 0.1
+  split_seed: 42
+hardware:
+  device: cuda:0
+  precision: bf16
+  mixed_precision: true
+  deterministic: false
+  cudnn_benchmark: true
+  tf32: true
+  cpu_threads: 4
+controller:
+  max_accuracy_drop_points: 5.0
+  max_failures: 3
+  min_quality_score: 0.6
+  regrow_ratio_multiplier: 0.8
+search:
+  max_iterations: 3
+  candidates_per_round: 2
+  candidate_ratios: [0.3, 0.5]
+  cheap_eval_samples: 500
+  enable_two_layer_candidates: false
+  recovery_top_k: 1
+recovery:
+  level: 1
+  epochs: 2
+  learning_rate: 0.001
+comparison:
+  methods: [dense_baseline, dense_small, oneshot_magnitude, oneshot_wanda, iterative_structured_level1, autonomous_search]
+  target_compression_ratio: 2.0
+  dense_small_hidden_dims: [256, 128, 64]
+  oneshot_layer_ratios:
+    features.0: 0.5
+    features.4: 0.5
+    features.8: 0.5
+  wanda_batches: 10
+  iterative_stage_ratios:
+    - features.0: 0.25
+    - features.4: 0.2
+  recovery_epochs: 2
+  recovery_learning_rate: 0.001
+logging:
+  output_root: results/p12_comparison_gpu
+  use_wandb: false
+run_label: mnist_p12_gpu
+seed: 42

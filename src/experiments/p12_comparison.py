@@ -14,6 +14,7 @@ from src.evaluation.frontier import ParetoFrontier
 from src.pruning.sensitivity import SensitivityAnalyzer
 from src.pruning.structured_pruning import StructuredPruning
 from src.recovery.reconstruction import quick_recovery
+from src.utils.device import resolve_device
 from src.utils.experiment_artifacts import set_seed, to_json_safe
 
 METHOD_NAMES = (
@@ -136,7 +137,8 @@ def run_method(
         recovery_seconds = 0.0
     elif method == "iterative_structured_level1":
         model, details, recovery_seconds = _iterative_structured(
-            source_model, train_loader, validation_loader, comparison, device
+            source_model, train_loader, validation_loader, comparison, device,
+            str(config["hardware"].get("precision", "fp32")),
         )
     else:
         model, details, recovery_seconds = _autonomous(
@@ -193,7 +195,7 @@ def _oneshot_structured(
     ratios = _layer_ratios(source_model, comparison.get("oneshot_layer_ratios", {}))
     pruner = StructuredPruning(source_model)
     keep_indices = _keep_indices(pruner, source_model, train_loader, ratios, importance_method, device, comparison)
-    model = pruner.create_pruned_model_by_indices(keep_indices)
+    model = pruner.create_pruned_model_by_indices(keep_indices).to(resolve_device(device))
     return model, {"importance_method": importance_method, "layer_keep_indices": keep_indices}
 
 
@@ -203,6 +205,7 @@ def _iterative_structured(
     validation_loader: DataLoader,
     comparison: Mapping[str, Any],
     device: str,
+    precision: str,
 ) -> tuple[nn.Module, Dict[str, Any], float]:
     stage_ratios = comparison.get("iterative_stage_ratios")
     if not isinstance(stage_ratios, list) or not stage_ratios:
@@ -212,7 +215,7 @@ def _iterative_structured(
     stages = []
     for stage, ratio_config in enumerate(stage_ratios, start=1):
         ratios = _layer_ratios(model, ratio_config)
-        model = StructuredPruning(model).create_pruned_model(ratios)
+        model = StructuredPruning(model).create_pruned_model(ratios).to(resolve_device(device))
         start = time.perf_counter()
         model, history = quick_recovery(
             model,
@@ -221,6 +224,7 @@ def _iterative_structured(
             epochs=int(comparison.get("recovery_epochs", 0)),
             learning_rate=float(comparison.get("recovery_learning_rate", 0.001)),
             device=device,
+            precision=precision,
             verbose=False,
         )
         recovery_seconds += time.perf_counter() - start
@@ -252,6 +256,7 @@ def _autonomous(
         recovery_epochs=int(recovery_config["epochs"]),
         recovery_learning_rate=float(recovery_config["learning_rate"]),
         device=str(config["hardware"]["device"]),
+        precision=str(config["hardware"].get("precision", "fp32")),
         enable_two_layer_candidates=bool(search_config.get("enable_two_layer_candidates", False)),
         recovery_top_k=int(search_config.get("recovery_top_k", 1)),
         frontier_archive=frontier,

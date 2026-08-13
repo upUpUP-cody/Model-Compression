@@ -1,0 +1,6 @@
+# GPU-specific packages are installed after selecting a CUDA wheel index.
+# Do not install this file unchanged on a CPU-only workstation.
+-r requirements.txt
+
+# Example for NVIDIA CUDA 12.6 wheels. Select the matching index at install time:
+# pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126

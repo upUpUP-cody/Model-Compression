@@ -15,6 +15,9 @@ import numpy as np
 import torch
 import yaml
 
+from src.utils.device import configure_cuda, device_metadata, resolve_device
+from src.utils.precision import precision_metadata, resolve_precision
+
 
 def load_config(path: str | Path) -> Dict[str, Any]:
     """Load and validate an autonomous-search YAML configuration."""
@@ -42,10 +45,16 @@ def validate_config(config: Dict[str, Any]) -> None:
             if not isinstance(current, dict) or key not in current:
                 raise ValueError(f"missing configuration key: {'.'.join(path)}")
             current = current[key]
-    if config["hardware"]["device"] != "cpu":
-        raise ValueError("the MVP runner supports only device: cpu")
-    if config["hardware"].get("mixed_precision", False):
-        raise ValueError("mixed_precision must be false for the CPU MVP")
+    hardware = config["hardware"]
+    try:
+        device = resolve_device(hardware["device"])
+        precision = resolve_precision(hardware.get("precision", "fp32"), device)
+    except (RuntimeError, ValueError) as error:
+        raise ValueError(f"invalid hardware configuration: {error}") from error
+    if device.type == "cpu" and hardware.get("mixed_precision", False):
+        raise ValueError("mixed_precision is unavailable on CPU; use precision: fp32")
+    if hardware.get("mixed_precision", False) and precision == "fp32":
+        raise ValueError("mixed_precision requires precision fp16 or bf16")
     if config["dataset"]["batch_size"] <= 0:
         raise ValueError("dataset.batch_size must be positive")
     if config["search"]["max_iterations"] <= 0:
@@ -69,12 +78,14 @@ def validate_config(config: Dict[str, Any]) -> None:
         raise ValueError("dataset.split_seed must be an integer")
 
 
-def set_seed(seed: int) -> None:
-    """Set reproducible CPU seeds for Python, NumPy, and PyTorch."""
+def set_seed(seed: int, deterministic: bool = True) -> None:
+    """Set reproducible Python, NumPy, and PyTorch seeds."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.use_deterministic_algorithms(True, warn_only=True)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.use_deterministic_algorithms(deterministic, warn_only=True)
 
 
 def to_json_safe(value: Any) -> Any:
@@ -129,14 +140,21 @@ def git_sha(project_root: str | Path = ".") -> Optional[str]:
         return None
 
 
-def runtime_metadata() -> Dict[str, Any]:
-    return {
+def runtime_metadata(device: str | torch.device = "cpu", precision: str = "fp32") -> Dict[str, Any]:
+    """Return serializable host, device, and precision metadata."""
+    resolved = resolve_device(device)
+    metadata = {
         "python": sys.version.split()[0],
         "platform": platform.platform(),
         "pytorch": torch.__version__,
         "numpy": np.__version__,
         "cpu_threads": int(torch.get_num_threads()),
+        "device": device_metadata(resolved),
+        "precision": precision_metadata(resolved, precision),
     }
+    if resolved.type == "cuda":
+        metadata["cuda_policy"] = configure_cuda({"hardware": {"device": str(resolved)}})
+    return metadata
 
 
 class RunArtifacts:

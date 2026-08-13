@@ -6,13 +6,13 @@
 
 ## 当前支持范围
 
-- CPU-first MNIST MLP。
+- CPU-first MNIST MLP with an opt-in CUDA execution layer for the P1.2 comparison protocol.
 - 隐藏 `Linear` 神经元的物理结构化剪枝。
 - 同步更新中间 `BatchNorm1d` 和下游 `Linear`。
 - Cheap Critic、基础启发式控制器、Level 1 recovery 和 JSON-safe 产物记录。
 - 合成数据单元测试。
 
-不支持残差网络、分支或共享层、CNN、Transformer、LoRA、自蒸馏和 GPU 实验执行。
+不支持残差网络、分支或共享层、CNN、Transformer、LoRA 和自蒸馏。GPU 基础层已部署，但 CUDA smoke 和正式实验必须在 GPU 主机完成。
 
 ## 环境
 
@@ -54,6 +54,7 @@ python experiments/run_autonomous_search.py --config configs/mnist_mlp_autonomou
 - [ROADMAP.md](ROADMAP.md)：简要阶段导航。
 - [MVP_DEVELOPMENT_PLAN.md](MVP_DEVELOPMENT_PLAN.md)：MVP 提交归档。
 - [WORKFLOW.md](WORKFLOW.md)：开发、实验和产物管理规则。
+- [docs/GPU_WORKFLOW.md](docs/GPU_WORKFLOW.md)：CUDA 主机安装、自检、smoke、冻结报告和正式 study 步骤。
 
 ## 代码质量约束
 

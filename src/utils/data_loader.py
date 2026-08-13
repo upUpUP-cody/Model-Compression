@@ -19,6 +19,9 @@ def get_mnist_loaders(
     validation_fraction: float = 0.1,
     split_seed: int = 42,
     return_test: bool = False,
+    pin_memory: Optional[bool] = None,
+    persistent_workers: bool = False,
+    prefetch_factor: Optional[int] = None,
 ) -> Tuple[DataLoader, DataLoader] | Tuple[DataLoader, DataLoader, DataLoader]:
     """
     获取 MNIST 数据加载器
@@ -54,8 +57,16 @@ def get_mnist_loaders(
     loader_kwargs = {
         "batch_size": batch_size,
         "num_workers": num_workers,
-        "pin_memory": torch.cuda.is_available(),
+        "pin_memory": torch.cuda.is_available() if pin_memory is None else bool(pin_memory),
     }
+    if persistent_workers and num_workers == 0:
+        raise ValueError("persistent_workers requires num_workers > 0")
+    if persistent_workers:
+        loader_kwargs["persistent_workers"] = True
+    if prefetch_factor is not None:
+        if num_workers == 0 or prefetch_factor < 1:
+            raise ValueError("prefetch_factor requires num_workers > 0")
+        loader_kwargs["prefetch_factor"] = int(prefetch_factor)
     train_loader = DataLoader(train_dataset, shuffle=shuffle_train, **loader_kwargs)
     validation_loader = DataLoader(validation_dataset, shuffle=False, **loader_kwargs)
     if return_test:

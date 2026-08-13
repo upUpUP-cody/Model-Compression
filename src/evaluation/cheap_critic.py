@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from src.utils.device import resolve_device
+
 
 @dataclass(frozen=True)
 class CheapCriticResult:
@@ -45,7 +47,8 @@ class CheapCritic:
     ) -> CheapCriticResult:
         if not isinstance(max_samples, int) or isinstance(max_samples, bool) or max_samples <= 0:
             raise ValueError("max_samples must be a positive integer")
-
+        device = resolve_device(device)
+        non_blocking = device.type == "cuda"
         original_training = model.training
         total_loss = 0.0
         correct = 0
@@ -59,8 +62,8 @@ class CheapCritic:
                     if remaining <= 0:
                         break
                     batch_size = min(remaining, target.size(0))
-                    data = data[:batch_size].to(device)
-                    target = target[:batch_size].to(device)
+                    data = data[:batch_size].to(device, non_blocking=non_blocking)
+                    target = target[:batch_size].to(device, non_blocking=non_blocking)
                     output = model(data)
                     loss = self.criterion(output, target)
                     total_loss += loss.item() * batch_size

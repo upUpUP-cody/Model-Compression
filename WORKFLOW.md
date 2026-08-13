@@ -38,7 +38,7 @@ python experiments/run_autonomous_search.py --config configs/mnist_mlp_autonomou
 
 ## GPU 扩展
 
-GPU 任务尚不属于当前 MVP。只有 P0/P1 验收完成后，才开始 CIFAR-10、CNN、LoRA、自蒸馏或论文级模型实验。
+P1.2 的 CUDA 基础层已部署。GPU 任务必须在新 NVIDIA 主机上先执行 `python scripts/check_gpu.py --device cuda:0`，再运行 `configs/mnist_p12_gpu_smoke.yaml`，通过冻结后的 `report-test` 后才能运行正式 `configs/mnist_p12_gpu_study.yaml`。完整命令和故障处理见 [docs/GPU_WORKFLOW.md](docs/GPU_WORKFLOW.md)。
 
 在云服务器上运行实验时，使用受控配置和独立输出目录。同步代码前确认当前分支和提交；同步结果前检查结果体积、敏感信息和可复核性。云服务器不会自动执行或停止任务，实验调度和监控必须由实际运行命令、日志和使用者确认。
 

@@ -15,6 +15,7 @@ from src.evaluation.frontier import ParetoFrontier, FrontierPoint
 from src.pruning.sensitivity import SensitivityAnalyzer
 from src.pruning.structured_pruning import StructuredPruning
 from src.recovery.reconstruction import quick_recovery
+from src.utils.device import resolve_device
 
 
 @dataclass(frozen=True)
@@ -155,6 +156,7 @@ class AutonomousSearch:
         recovery_epochs: int = 1,
         recovery_learning_rate: float = 0.001,
         device: str = "cpu",
+        precision: str = "fp32",
         enable_two_layer_candidates: bool = False,
         recovery_top_k: int = 1,
         frontier_archive: Optional[ParetoFrontier] = None,
@@ -166,7 +168,8 @@ class AutonomousSearch:
         if not candidate_ratios:
             raise ValueError("candidate_ratios must not be empty")
 
-        current_model = copy.deepcopy(parent_model)
+        resolved_device = resolve_device(device)
+        current_model = copy.deepcopy(parent_model).to(resolved_device)
         self.controller.reset()
         baseline = self.evaluator(current_model, validation_loader, device)
         history = SearchHistory(
@@ -208,7 +211,7 @@ class AutonomousSearch:
                 try:
                     candidate_model = StructuredPruning(current_model).create_pruned_model_by_indices(
                         spec.keep_indices_dict()
-                    )
+                    ).to(resolved_device)
                     actual_count = _parameter_count(candidate_model)
                     spec = replace(
                         spec,
@@ -284,7 +287,7 @@ class AutonomousSearch:
                 recovered_model, recovery_history = self.recovery_fn(
                     candidate_model, train_loader, validation_loader,
                     epochs=recovery_epochs, learning_rate=recovery_learning_rate,
-                    device=device, verbose=False,
+                    device=device, precision=precision, verbose=False,
                 )
                 validation = self.evaluator(recovered_model, validation_loader, device)
                 best_record["recovery"] = _json_safe(recovery_history)

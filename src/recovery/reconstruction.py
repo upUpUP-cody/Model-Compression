@@ -6,6 +6,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from src.utils.device import resolve_device
+from src.utils.precision import autocast_context, grad_scaler, resolve_precision
+
 
 class ReconstructionRecovery:
     """Fine-tune a pruned model and restore its best validation state."""
@@ -16,10 +19,14 @@ class ReconstructionRecovery:
         device: str = "cpu",
         learning_rate: float = 0.001,
         weight_decay: float = 1e-4,
+        precision: str = "fp32",
     ) -> None:
-        self.model = model.to(device)
-        self.device = device
+        self.device = resolve_device(device)
+        self.precision = resolve_precision(precision, self.device)
+        self.non_blocking = self.device.type == "cuda"
+        self.model = model.to(self.device)
         self.criterion = nn.CrossEntropyLoss()
+        self.scaler = grad_scaler(self.device, self.precision)
         self.optimizer = torch.optim.Adam(
             self.model.parameters(), lr=learning_rate, weight_decay=weight_decay
         )
@@ -32,12 +39,21 @@ class ReconstructionRecovery:
         batches = 0
         for data, target in train_loader:
             batches += 1
-            data, target = data.to(self.device), target.to(self.device)
+            data, target = (
+                data.to(self.device, non_blocking=self.non_blocking),
+                target.to(self.device, non_blocking=self.non_blocking),
+            )
             self.optimizer.zero_grad()
-            output = self.model(data)
-            loss = self.criterion(output, target)
-            loss.backward()
-            self.optimizer.step()
+            with autocast_context(self.device, self.precision):
+                output = self.model(data)
+                loss = self.criterion(output, target)
+            if self.scaler is None:
+                loss.backward()
+                self.optimizer.step()
+            else:
+                self.scaler.scale(loss).backward()
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
             total_loss += loss.item()
             correct += output.argmax(dim=1).eq(target).sum().item()
             total += target.size(0)
@@ -54,9 +70,14 @@ class ReconstructionRecovery:
         batches = 0
         for data, target in validation_loader:
             batches += 1
-            data, target = data.to(self.device), target.to(self.device)
-            output = self.model(data)
-            total_loss += self.criterion(output, target).item()
+            data, target = (
+                data.to(self.device, non_blocking=self.non_blocking),
+                target.to(self.device, non_blocking=self.non_blocking),
+            )
+            with autocast_context(self.device, self.precision):
+                output = self.model(data)
+                loss = self.criterion(output, target)
+            total_loss += loss.item()
             correct += output.argmax(dim=1).eq(target).sum().item()
             total += target.size(0)
         if batches == 0 or total == 0:
@@ -130,11 +151,12 @@ def quick_recovery(
     epochs: int = 10,
     learning_rate: float = 0.001,
     device: str = "cpu",
+    precision: str = "fp32",
     verbose: bool = True,
 ) -> tuple[nn.Module, Dict]:
     """Recover an isolated copy of a pruned model using validation data."""
     recoverer = ReconstructionRecovery(
-        model=copy.deepcopy(pruned_model), device=device, learning_rate=learning_rate
+        model=copy.deepcopy(pruned_model), device=device, learning_rate=learning_rate, precision=precision
     )
     history = recoverer.recover(
         train_loader=train_loader,
