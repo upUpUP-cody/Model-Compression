@@ -42,10 +42,6 @@ def get_mnist_loaders(
     full_train_dataset = datasets.MNIST(
         root=data_dir, train=True, download=True, transform=transform
     )
-    test_dataset = datasets.MNIST(
-        root=data_dir, train=False, download=True, transform=transform
-    )
-
     total_size = len(full_train_dataset)
     validation_size = int(total_size * validation_fraction)
     generator = torch.Generator().manual_seed(split_seed)
@@ -62,8 +58,11 @@ def get_mnist_loaders(
     }
     train_loader = DataLoader(train_dataset, shuffle=shuffle_train, **loader_kwargs)
     validation_loader = DataLoader(validation_dataset, shuffle=False, **loader_kwargs)
-    test_loader = DataLoader(test_dataset, shuffle=False, **loader_kwargs)
     if return_test:
+        test_dataset = datasets.MNIST(
+            root=data_dir, train=False, download=True, transform=transform
+        )
+        test_loader = DataLoader(test_dataset, shuffle=False, **loader_kwargs)
         return train_loader, validation_loader, test_loader
     return train_loader, validation_loader
 

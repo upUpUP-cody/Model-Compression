@@ -225,6 +225,38 @@ class RunArtifacts:
         self._write_json(path, manifest)
         return path
 
+    def save_comparison(self, records: Iterable[Dict[str, Any]]) -> tuple[Path, Path]:
+        """Persist validation-only comparison records as JSON and CSV."""
+        normalized = [to_json_safe(record) for record in records]
+        json_path = self.run_dir / "comparison.json"
+        self._write_json(json_path, {"records": normalized})
+        csv_path = self.run_dir / "comparison.csv"
+        fieldnames = [
+            "method", "status", "target_compression_ratio", "baseline_parameter_count",
+            "parameter_count", "compression_ratio", "validation_accuracy", "validation_loss",
+            "selection_seconds", "recovery_seconds", "checkpoint", "checkpoint_sha256",
+        ]
+        with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+            writer.writeheader()
+            for record in normalized:
+                validation = record.get("validation", {})
+                writer.writerow({
+                    "method": record.get("method"),
+                    "status": record.get("status"),
+                    "target_compression_ratio": record.get("target_compression_ratio"),
+                    "baseline_parameter_count": record.get("baseline_parameter_count"),
+                    "parameter_count": record.get("parameter_count"),
+                    "compression_ratio": record.get("compression_ratio"),
+                    "validation_accuracy": validation.get("accuracy"),
+                    "validation_loss": validation.get("loss"),
+                    "selection_seconds": record.get("selection_seconds"),
+                    "recovery_seconds": record.get("recovery_seconds"),
+                    "checkpoint": record.get("checkpoint"),
+                    "checkpoint_sha256": record.get("checkpoint_sha256"),
+                })
+        return json_path, csv_path
+
     def measure_inference(self, model: torch.nn.Module, loader: Any, device: str = "cpu", warmup: int = 1) -> Dict[str, float]:
         """Measure warm inference latency and throughput for a fixed loader."""
         model = model.to(device)
