@@ -126,10 +126,59 @@ def test_full_validation_rejection_leaves_accepted_model_unchanged():
     )
 
     assert accepted.features[0].out_features == 4
-    assert history.events[0]["final_action"] == "reject"
-    assert history.events[0]["final_reason"] == "full_validation_failed"
+    assert history.events[0]["final_action"] == "regrow"
+    assert history.events[0]["final_reason"] == "capability_gap_exceeded"
     for name, expected in source_state.items():
         assert torch.equal(source.state_dict()[name], expected), name
+
+
+class LowCheapHighRecoveryCritic:
+    def evaluate(self, model, dataloader, max_samples, device):
+        return CheapCriticResult(
+            loss=3.0,
+            accuracy=20.0,
+            samples=min(max_samples, len(dataloader.dataset)),
+            parameter_count=sum(parameter.numel() for parameter in model.parameters()),
+            nonzero_parameter_count=sum(
+                (parameter.detach() != 0).sum().item() for parameter in model.parameters()
+            ),
+            elapsed_seconds=0.0,
+        )
+
+
+def test_search_recovers_before_capability_gate_and_can_accept():
+    """Cheap Critic may look terrible; post-recovery accuracy decides accept/regrow."""
+    source = make_model()
+    recovery_calls = {"count": 0}
+
+    def tracking_recovery(model, train_loader, validation_loader, **kwargs):
+        recovery_calls["count"] += 1
+        return model, {"best_validation_accuracy": 90.0}
+
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=2.0),
+        critic=LowCheapHighRecoveryCritic(),
+        evaluator=evaluator,
+        importance_fn=importance,
+        recovery_fn=tracking_recovery,
+    )
+    accepted, history = search.run(
+        source,
+        make_loader(),
+        make_loader(),
+        max_iterations=1,
+        candidate_ratios=(0.5,),
+        candidates_per_round=1,
+        cheap_eval_samples=5,
+        recovery_epochs=1,
+    )
+
+    assert recovery_calls["count"] == 1
+    assert history.events[0]["cheap_critic"]["accuracy"] == 20.0
+    assert history.events[0]["validation"]["accuracy"] == 90.0
+    assert history.events[0]["final_action"] == "accept"
+    assert accepted.features[0].out_features == 2
+    assert sum(p.numel() for p in accepted.parameters()) < sum(p.numel() for p in source.parameters())
 
 
 def test_search_skips_previously_attempted_configurations():

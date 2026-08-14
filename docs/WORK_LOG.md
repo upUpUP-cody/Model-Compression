@@ -2,9 +2,9 @@
 
 > 用途：记录做了什么、关键结论与创新点。供论文/答辩/交接使用。
 > 对应精简版：[WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md)
-> 日期：2026-08-13（2.4 压缩比 / 2.5 sweep：2026-08-14）
+> 日期：2026-08-13（2.4–2.6：压缩比 / sweep / 搜索门禁，2026-08-14）
 > 主机：RTX 4090 Linux，torch 2.13.0+cu130
-> 代码：`f804df4`（目标压缩比接线）；sweep 结果在 `results/`（不进 Git）
+> 代码：搜索门禁修复待提交；sweep/formal 结果在 `results/`（不进 Git）
 
 ---
 
@@ -234,6 +234,27 @@
 4. **自主搜索未压缩**：Cheap Critic + `max_accuracy_drop_points: 2.0` 在恢复前因 `capability_gap_exceeded` 拒绝全层候选；search 的 87.88% 只是 baseline，**不能**声称搜索优于迭代。
 5. 旧 ~1.00x formal/multiseed **不得**与本 sweep 混写。
 
+### 2.6 修复 CNN 搜索门禁（2026-08-14）
+
+**根因**：Cheap Critic 在恢复前用 `max_accuracy_drop_points` 硬拒；全层 2x 剪枝后 Critic 约 20%，触发 `capability_gap_exceeded`，恢复从未执行。
+
+**修复**：[`src/autonomous_search.py`](../src/autonomous_search.py) — Critic 只做短名单排序；对 `recovery_top_k` 先 recovery，再用恢复后 validation 做 `decide_action`。最终 2 点门禁不变。
+
+**2x formal 短验证**（`max_accuracy_drop_points: 2.0`，recovery 3 epoch）
+
+目录：`results/cifar_p12_comparison_gpu/cifar_p12_comparison_cifar_p12_gpu_study_514cff755ed7`
+
+| 方法 | 实际压缩 | Val Acc | Test Acc |
+|------|----------|---------|----------|
+| dense_baseline | 1.00x | 88.86 | 87.88 |
+| dense_small | 3.99x | 69.08 | 68.57 |
+| oneshot_magnitude | 2.01x | 46.40 | 45.80 |
+| oneshot_wanda | 2.01x | 22.92 | 23.49 |
+| iterative_structured_level1 | 2.01x | 88.98 | 88.01 |
+| autonomous_search | **7.66x** | 85.92 | 85.13 |
+
+Search 三轮均 `accept`：Cheap Critic 21.9% / 14.8% / 8.2%，恢复后 val 88.12 → 87.66 → 85.92。门禁 `compression_ratio > 1.05` 通过。同目标 2x 下 iterative 压缩更保守（停在 2.01x）但 test 略高；search 在多轮接受后压到 7.66x，test 85.13。旧 sweep 的 search=1.00x 结论作废。
+
 ---
 
 ## 3. 创新点（写论文时可用的表述）
@@ -260,7 +281,7 @@
 
 当前 **还不能声称** 的（避免写过头）：
 
-- CIFAR 上自主搜索已经优于迭代剪枝（sweep 里 search 未接受任何剪枝候选，仍是 1.00x baseline）
+- CIFAR 上自主搜索已经系统优于迭代剪枝（单次 formal：search 7.66x / 85.13% test，iterative 2.01x / 88.01%；需同压缩预算对照后再下结论）
 - LoRA / 自蒸馏已经有效（只实现了接口）
 - 达到论文级 CIFAR 精度（20 epoch 基线约 88%，正式基线通常要 100+ epoch）
 
@@ -268,8 +289,8 @@
 
 ## 4. 下一步（按优先级）
 
-1. 修复 / 放宽 CNN 搜索门禁（Cheap Critic 与恢复顺序），或单独跑能真正压缩的 search 对照
-2. 恢复消融 Level 1/2/3（迭代路径已证明 Level 1 有效）
+1. 恢复消融 Level 1/2/3（迭代路径已证明 Level 1 有效）
+2. 同压缩预算下重跑 search vs iterative 对照（或带修复后的 6×3 sweep）
 3. Qwen/SQuAD：**规划占位，不实现**
 
 ---

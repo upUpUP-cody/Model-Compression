@@ -264,15 +264,55 @@ class AutonomousSearch:
             for rank, item in enumerate(recovery_candidates):
                 item[3]["recovery_rank"] = rank + 1
 
-            best_spec, candidate_model, critic_result, best_record = recovery_candidates[0]
+            # Cheap Critic only ranks; capability gate uses post-recovery validation.
+            recovered_shortlist = []
+            for spec, candidate_model, critic_result, record in recovery_candidates:
+                recovered_model, recovery_history = self.recovery_fn(
+                    candidate_model,
+                    train_loader,
+                    validation_loader,
+                    epochs=recovery_epochs,
+                    learning_rate=recovery_learning_rate,
+                    device=device,
+                    precision=precision,
+                    verbose=False,
+                )
+                validation = self.evaluator(recovered_model, validation_loader, device)
+                record["recovery"] = _json_safe(recovery_history)
+                record["validation"] = validation
+                if frontier_archive is not None:
+                    frontier_point = FrontierPoint(
+                        validation_accuracy=validation["accuracy"],
+                        parameter_count=_parameter_count(recovered_model),
+                        compression_ratio=history.initial_parameter_count / max(
+                            1, _parameter_count(recovered_model)
+                        ),
+                        candidate_spec=spec.to_dict(),
+                        iteration=iteration,
+                    )
+                    frontier_archive.add(frontier_point)
+                    history.frontier_points = [point.to_dict() for point in frontier_archive.points]
+                recovered_shortlist.append(
+                    (spec, recovered_model, critic_result, record, validation)
+                )
+
+            recovered_shortlist.sort(
+                key=lambda item: (
+                    -float(item[4]["accuracy"]),
+                    -(item[0].parent_parameter_count - item[0].parameter_count),
+                    item[0].fingerprint,
+                )
+            )
+            best_spec, recovered_model, critic_result, best_record, validation = recovered_shortlist[0]
             fingerprint = best_spec.fingerprint
-            quality = 1.0 / (1.0 + critic_result.loss)
+            recovered_count = _parameter_count(recovered_model)
+            quality = 1.0 / (1.0 + float(validation.get("loss", critic_result.loss)))
             profile = CandidateProfile(
                 fingerprint=fingerprint,
                 quality=quality,
-                accuracy=critic_result.accuracy,
+                accuracy=float(validation["accuracy"]),
                 parent_accuracy=history.baseline_accuracy,
-                parameter_count=best_spec.parameter_count,
+                parameter_count=recovered_count,
                 parent_parameter_count=history.accepted_parameter_count,
             )
             decision = self.controller.decide_action(profile, history=history)
@@ -283,62 +323,49 @@ class AutonomousSearch:
                 "fingerprint": fingerprint,
                 "candidate_spec": best_spec.to_dict(),
                 "importance_method": best_spec.importance_method,
-                "actual_parameter_count": best_spec.parameter_count,
+                "actual_parameter_count": recovered_count,
                 "parent_parameter_count": best_spec.parent_parameter_count,
-                "compression_ratio": best_spec.compression_ratio,
+                "compression_ratio": (
+                    history.initial_parameter_count / recovered_count if recovered_count else 1.0
+                ),
                 "cheap_critic": critic_result.to_dict(),
+                "recovery": best_record.get("recovery"),
+                "validation": validation,
                 "decision": decision.to_dict(),
             }
 
             if decision.action == "accept":
-                recovered_model, recovery_history = self.recovery_fn(
-                    candidate_model, train_loader, validation_loader,
-                    epochs=recovery_epochs, learning_rate=recovery_learning_rate,
-                    device=device, precision=precision, verbose=False,
-                )
-                validation = self.evaluator(recovered_model, validation_loader, device)
-                best_record["recovery"] = _json_safe(recovery_history)
-                best_record["validation"] = validation
-                if frontier_archive is not None:
-                    frontier_point = FrontierPoint(
-                        validation_accuracy=validation["accuracy"],
-                        parameter_count=_parameter_count(recovered_model),
-                        compression_ratio=history.initial_parameter_count / _parameter_count(recovered_model),
-                        candidate_spec=best_spec.to_dict(),
-                        iteration=iteration,
-                    )
-                    frontier_archive.add(frontier_point)
-                    history.frontier_points = [point.to_dict() for point in frontier_archive.points]
-                accepted = (
-                    validation["accuracy"] >= history.baseline_accuracy - self.controller.max_accuracy_drop_points
-                    and _parameter_count(recovered_model) < history.accepted_parameter_count
-                )
-                best_record["recovery"] = _json_safe(recovery_history)
-                best_record["validation"] = validation
-                if accepted:
-                    current_model = recovered_model
-                    accepted_snapshot = copy.deepcopy(current_model)
-                    history.baseline_accuracy = float(validation["accuracy"])
-                    history.accepted_parameter_count = _parameter_count(recovered_model)
-                    history.consecutive_failures = 0
-                    best_record["final_action"] = "accept"
-                    event.update(final_action="accept", final_reason="constraints_satisfied")
-                else:
-                    history.consecutive_failures += 1
-                    best_record.update(final_action="reject", final_reason="full_validation_failed")
-                    event.update(final_action="reject", final_reason="full_validation_failed")
+                current_model = recovered_model
+                accepted_snapshot = copy.deepcopy(current_model)
+                history.baseline_accuracy = float(validation["accuracy"])
+                history.accepted_parameter_count = recovered_count
+                history.consecutive_failures = 0
+                best_record["final_action"] = "accept"
+                event.update(final_action="accept", final_reason="constraints_satisfied")
             elif decision.action == "regrow":
                 before = ratio_multiplier
                 ratio_multiplier *= decision.next_ratio_multiplier
                 history.ratio_multiplier = ratio_multiplier
                 history.consecutive_failures += 1
-                best_record.update(final_action="regrow", regrow_multiplier_before=before, regrow_multiplier_after=ratio_multiplier)
+                best_record.update(
+                    final_action="regrow",
+                    regrow_multiplier_before=before,
+                    regrow_multiplier_after=ratio_multiplier,
+                )
                 event.update(final_action="regrow", final_reason=decision.reason)
             elif decision.action == "rollback":
                 current_model = copy.deepcopy(accepted_snapshot)
                 history.consecutive_failures += 1
-                best_record.update(final_action="rollback", final_reason="rollback_failure_limit_reached", rollback_restored=True)
-                event.update(final_action="rollback", final_reason="rollback_failure_limit_reached", terminal=True)
+                best_record.update(
+                    final_action="rollback",
+                    final_reason="rollback_failure_limit_reached",
+                    rollback_restored=True,
+                )
+                event.update(
+                    final_action="rollback",
+                    final_reason="rollback_failure_limit_reached",
+                    terminal=True,
+                )
                 history.add_event(event)
                 break
             else:
