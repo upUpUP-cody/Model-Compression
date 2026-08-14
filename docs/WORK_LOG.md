@@ -1,10 +1,10 @@
 # 工作日志（详细）
 
-> 用途：记录做了什么、关键结论与创新点。供论文/答辩/交接使用。  
-> 对应精简版：[WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md)  
-> 日期：2026-08-13（2.4 压缩比验证：2026-08-14）  
-> 主机：RTX 4090 Linux，torch 2.13.0+cu130  
-> 代码：`b60d4e9`（P2 实现已推送 GitHub）；目标压缩比接线为后续提交
+> 用途：记录做了什么、关键结论与创新点。供论文/答辩/交接使用。
+> 对应精简版：[WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md)
+> 日期：2026-08-13（2.4 压缩比 / 2.5 sweep：2026-08-14）
+> 主机：RTX 4090 Linux，torch 2.13.0+cu130
+> 代码：`f804df4`（目标压缩比接线）；sweep 结果在 `results/`（不进 Git）
 
 ---
 
@@ -61,16 +61,16 @@
 
 **创新 / 设计要点（相对“直接套 MLP 剪枝”）**
 
-1. **显式 CNN 依赖图，禁止用 MLP 层名枚举套 ResNet**  
+1. **显式 CNN 依赖图，禁止用 MLP 层名枚举套 ResNet**
    残差块若剪错输出通道，shortcut 对不齐，forward 直接炸。我们选择剪 **块内中间宽度**，保证残差两端维度不变。这是工程正确性，也是方法可迁移的前提。
 
-2. **同一套六方法对照协议从 MLP 迁到 CNN**  
+2. **同一套六方法对照协议从 MLP 迁到 CNN**
    dense / dense_small / oneshot magnitude / oneshot Wanda / 迭代 Level1 / autonomous search。论文叙事可以是“协议不变，架构升级”，而不是另起一套实验。
 
-3. **Wanda 对 Conv 的定义**  
+3. **Wanda 对 Conv 的定义**
    通道分数 = 卷积核 L2 × 该通道平均激活幅度（对 NCHW 在 N,H,W 上聚合）。与 Linear 的 Wanda 同构，便于写进方法章节。
 
-4. **恢复分级预留**  
+4. **恢复分级预留**
    Level 1 全参数微调、Level 2 LoRA、Level 3 师生蒸馏，准备做消融，而不是只报一个“finetune 一下”。
 
 ### 2.3 CIFAR 基线 + P1.2 Smoke（2026-08-13 已跑通）
@@ -189,7 +189,50 @@
 | iterative_structured_level1 | **2.01x** | 46.40 | 45.80 |
 | autonomous_search | **2.01x** | 23.12 | 23.62 |
 
-剪枝臂压缩落在 1.7–2.3 门禁内。无恢复时准确率大幅下降是预期，不能用来比较方法优劣。全量 6×3 sweep 仍未跑。
+剪枝臂压缩落在 1.7–2.3 门禁内。无恢复时准确率大幅下降是预期，不能用来比较方法优劣。
+
+### 2.5 CIFAR 6×3 压缩率 Sweep（2026-08-14 已跑通）
+
+**命令**
+
+```bash
+./scripts/run_gpu.sh python experiments/run_cifar_p12_multiseed.py \
+  --config configs/cifar_p12_gpu_sweep.yaml \
+  --checkpoint checkpoints/cifar_resnet18_baseline.pth --sweep
+```
+
+**产物**
+
+| 项 | 路径 |
+|----|------|
+| 根目录 | `results/cifar_p12_comparison_gpu_sweep/` |
+| 聚合 JSON | `results/cifar_p12_comparison_gpu_sweep/aggregate/aggregate_summary.json` |
+| 报告 | `results/cifar_p12_comparison_gpu_sweep/AGGREGATE_REPORT.md` |
+
+墙钟约 **22 分钟**（18 study）。`recovery_epochs: 2`。
+
+**实际压缩（3 seed 均值）**
+
+| 目标 | oneshot / iterative | autonomous_search |
+|------|---------------------|-------------------|
+| 1.5x–10x | 全部落在目标 ±15% 内（例：2.01x、4.03x、10.16x） | **始终 1.00x** |
+
+**Test acc mean±std（摘录）**
+
+| 目标 | oneshot_mag | oneshot_wanda | iterative | search |
+|------|-------------|---------------|-----------|--------|
+| 1.5x | 69.12±0.00 | 69.96±0.89 | **87.73±0.69** | 87.88±0.00 |
+| 2.0x | 45.80±0.00 | 22.23±1.21 | **87.43±0.33** | 87.88±0.00 |
+| 4.0x | 17.48±0.00 | 12.14±0.17 | **86.52±0.64** | 87.88±0.00 |
+| 10.0x | 10.53±0.00 | 11.33±0.21 | **83.42±0.39** | 87.88±0.00 |
+
+**结论**
+
+1. **oneshot / iterative 已真正打到目标压缩比**；不再是旧 formal 的 ~1.00x。
+2. **one-shot 无恢复在 ≥2x 后崩溃**（负结果保留，与 MNIST 同构）。
+3. **迭代 Level-1 恢复是当前 CIFAR 主证据**：10x 仍约 83.4% test（baseline 87.88）。
+4. **自主搜索未压缩**：Cheap Critic + `max_accuracy_drop_points: 2.0` 在恢复前因 `capability_gap_exceeded` 拒绝全层候选；search 的 87.88% 只是 baseline，**不能**声称搜索优于迭代。
+5. 旧 ~1.00x formal/multiseed **不得**与本 sweep 混写。
 
 ---
 
@@ -197,27 +240,27 @@
 
 按“能写进 related work 对比”的粒度，而不是营销口号：
 
-1. **自主搜索 + 物理结构化剪枝，而不是幅值掩码**  
+1. **自主搜索 + 物理结构化剪枝，而不是幅值掩码**
    候选用 Wanda 索引真正改 Linear/Conv 形状，参数量下降可测、可部署。
 
-2. **可审计搜索**  
+2. **可审计搜索**
    每个候选有 fingerprint、Cheap Critic、淘汰原因、rollback 快照；不是只报最终模型。
 
-3. **Pareto 用 validation accuracy vs 真实参数量**  
+3. **Pareto 用 validation accuracy vs 真实参数量**
    不用 `acc / compression` 这种无量纲伪指标。
 
-4. **严格三路数据协议**  
+4. **严格三路数据协议**
    选择只看 validation；test 只在 manifest 冻结后评估一次。这是可复现声明的核心。
 
-5. **CNN 迁移的结构约束**  
+5. **CNN 迁移的结构约束**
    ResNet 剪枝单位是块内中间通道，残差对齐作为硬约束，而不是事后 pad。
 
-6. **对照完整**  
+6. **对照完整**
    同一预算下比较 dense、同规模 dense_small、one-shot、迭代恢复、自主搜索；保留 one-shot 在高压缩失败的负结果。
 
 当前 **还不能声称** 的（避免写过头）：
 
-- CIFAR 上自主搜索已经优于迭代剪枝（2x smoke 无恢复，准确率未恢复）
+- CIFAR 上自主搜索已经优于迭代剪枝（sweep 里 search 未接受任何剪枝候选，仍是 1.00x baseline）
 - LoRA / 自蒸馏已经有效（只实现了接口）
 - 达到论文级 CIFAR 精度（20 epoch 基线约 88%，正式基线通常要 100+ epoch）
 
@@ -225,10 +268,9 @@
 
 ## 4. 下一步（按优先级）
 
-1. CIFAR 压缩率 sweep（2x 已验证可达到，可跑 6×3）
-2. 带 recovery 的 2x formal / multiseed（smoke 无恢复，不能当方法对比）
-3. 恢复消融 Level 1/2/3
-4. Qwen/SQuAD：**规划占位，不实现**
+1. 修复 / 放宽 CNN 搜索门禁（Cheap Critic 与恢复顺序），或单独跑能真正压缩的 search 对照
+2. 恢复消融 Level 1/2/3（迭代路径已证明 Level 1 有效）
+3. Qwen/SQuAD：**规划占位，不实现**
 
 ---
 
