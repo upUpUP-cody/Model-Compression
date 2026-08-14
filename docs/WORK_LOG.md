@@ -4,7 +4,7 @@
 > 对应精简版：[WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md)
 > 日期：2026-08-13（2.4–2.6：压缩比 / sweep / 搜索门禁，2026-08-14）
 > 主机：RTX 4090 Linux，torch 2.13.0+cu130
-> 代码：搜索门禁修复待提交；sweep/formal 结果在 `results/`（不进 Git）
+> 代码：`8b61c86`（搜索门禁：recovery 后再 decide）；sweep/formal 结果在 `results/`（不进 Git）
 
 ---
 
