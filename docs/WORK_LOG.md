@@ -600,7 +600,12 @@ dense_baseline test **90.36%**。oneshot 在 ≥4x 仍崩溃（负结果保留�
 1. [√] 叙事定稿：regime-dependent；「系统全面更优」仍 `[×]`
 2. [√] Step 2–3 预算对齐与一步关键复验；§2.16 诊断后一步策略收窄为 `target<=2`
 3. [√] Step 4：Phase J 规划 — [PHASE_J_QWEN_PLAN.md](PHASE_J_QWEN_PLAN.md)
-4. **之后**：Phase K 须先扩盘（约 30G+）；视觉域主实验链可停，不重跑全表；写论文见 [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md)
+4. [√] **Phase K 启动冒烟（2026-08-15）**：Qwen2.5-1.5B-Instruct + SQuAD 2.0；大文件在 `/mnt/data`
+   - 环境：`scripts/env_llm.sh`；视觉 `results/`/`checkpoints/` 已迁到 `/mnt/data` 并软链
+   - 协议：`src/utils/squad_protocol.py`（官方 validation = 冻结 test）
+   - 剪枝：`src/pruning/transformer_structured_pruning.py`（head KV-group + FFN 中间维，物理缩小）
+   - 冒烟产物：`/mnt/data/results/qwen_squad_smoke/`（dense / oneshot；**不**声称 LLM 上 search 更优）
+5. **之后**：LLM iterative/search 小矩阵见 [PHASE_K_QWEN_PLAN.md](PHASE_K_QWEN_PLAN.md)；论文视觉章节见 [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md)
 
 Phase H / Phase I 证据：[EVIDENCE_PACK.md](EVIDENCE_PACK.md)。
 

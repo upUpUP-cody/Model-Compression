@@ -1,4 +1,4 @@
-"""Thin pruning backend abstraction for MLP and CNN models."""
+"""Thin pruning backend abstraction for MLP, CNN, and Transformer models."""
 from __future__ import annotations
 
 from typing import Dict, List, Protocol, Sequence, runtime_checkable
@@ -9,6 +9,7 @@ import torch.nn as nn
 from src.models.resnet_cifar import ResNetCIFAR
 from src.pruning.cnn_structured_pruning import CnnStructuredPruning
 from src.pruning.structured_pruning import StructuredPruning
+from src.pruning.transformer_structured_pruning import TransformerStructuredPruning
 
 
 @runtime_checkable
@@ -100,11 +101,46 @@ class CnnBackend:
         return keep_indices
 
 
+class TransformerBackend:
+    def __init__(self, model: nn.Module) -> None:
+        self._pruner = TransformerStructuredPruning(model)
+        self.model = model
+
+    def prunable_layer_names(self) -> List[str]:
+        return self._pruner.prunable_layer_names()
+
+    def output_size(self, layer_name: str) -> int:
+        return self._pruner.output_size(layer_name)
+
+    def create_pruned_model_by_indices(self, layer_keep_indices: Dict[str, Sequence[int]]) -> nn.Module:
+        return self._pruner.create_pruned_model_by_indices(layer_keep_indices)
+
+    def create_pruned_model(self, pruning_config: Dict[str, float]) -> nn.Module:
+        return self._pruner.create_pruned_model(pruning_config)
+
+    def keep_indices_by_ratio(
+        self,
+        layer_name: str,
+        prune_ratio: float,
+        importance_scores: torch.Tensor,
+    ) -> List[int]:
+        return self._pruner.keep_indices_by_ratio(layer_name, prune_ratio, importance_scores)
+
+
 def resolve_pruning_backend(model: nn.Module, model_type: str | None = None) -> PruningBackend:
     if model_type is None:
-        model_type = "resnet_cifar" if isinstance(model, ResNetCIFAR) else "mlp"
+        if isinstance(model, ResNetCIFAR):
+            model_type = "resnet_cifar"
+        elif "qwen" in type(model).__name__.lower() or str(
+            getattr(getattr(model, "config", None), "model_type", "")
+        ).lower() in {"qwen2", "qwen3"}:
+            model_type = "qwen"
+        else:
+            model_type = "mlp"
     if model_type == "mlp":
         return MlpBackend(model)
     if model_type in {"resnet_cifar", "cnn"}:
         return CnnBackend(model)
+    if model_type in {"qwen", "transformer", "qwen2"}:
+        return TransformerBackend(model)
     raise ValueError(f"unsupported model.type for pruning backend: {model_type}")

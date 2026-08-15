@@ -642,12 +642,13 @@ flowchart TD
 - **磁盘**：实现前须先提醒用户扩盘（Qwen 权重/缓存/多次 run 通常还需 **30G+** 空闲）
 - 本阶段只写接口草图与实验矩阵，**不实现** Transformer 剪枝 / SQuAD pipeline；**不下载**权重
 
-### Phase K — 仅当门禁满足后才实现
+### Phase K — LLM 实现（冒烟已完成；小矩阵进行中）
 
-- **开代码前**：先告知用户「要上 Qwen 了，请拓展磁盘」，确认空间后再下载模型与数据
-- E1/E2 级对照：dense / oneshot / iterative / search
-- 沿用 train/val/test 隔离与 **物理结构化剪枝**（非掩码稀疏）
-- 同压缩预算对照与审计产物要求与 P1/P2 一致
+- 执行计划：[docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)
+- 模型锁定：`Qwen2.5-1.5B-Instruct`；数据：SQuAD 2.0；大文件：`/mnt/data`
+- [√] K0–K4：环境 / 下载 / 协议 / 物理剪枝 / dense+oneshot 冒烟
+- [ ] K5–K6：iterative + search 接线与 1.5x–4x 同预算小矩阵（详见 PHASE_K 文档）
+- 同压缩预算对照与审计产物要求与 P1/P2 一致；**不预设** search 全面更优
 
 ---
 
@@ -657,6 +658,7 @@ flowchart TD
 2. [√] 预算对齐、一步复验与 4x 诊断（一步策略收窄为 `target<=2`）
 3. [√] Phase J 规划：[`docs/PHASE_J_QWEN_PLAN.md`](docs/PHASE_J_QWEN_PLAN.md)
 4. [√] 论文成果提纲：[`docs/PAPER_RESULTS_OUTLINE.md`](docs/PAPER_RESULTS_OUTLINE.md)
-5. **之后**：按成果提纲扩写论文章节；Phase K 仅在确认扩盘（约 30G+）后启动；不默认重跑全表
+5. [√] Phase K 冒烟：[`docs/PHASE_K_QWEN_PLAN.md`](docs/PHASE_K_QWEN_PLAN.md)（K0–K4）
+6. **之后**：按 Phase K 文档推进 K5–K6；按成果提纲扩写论文章节；不默认重跑 formal100
 
-执行顺序与验收细节仍以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 为准；实验结论以 WORK_LOG 为准；写论文以 PAPER_RESULTS_OUTLINE 为准。
+执行顺序与验收细节仍以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 为准；实验结论以 WORK_LOG 为准；写论文以 PAPER_RESULTS_OUTLINE 为准；LLM 以 PHASE_K_QWEN_PLAN 为准。

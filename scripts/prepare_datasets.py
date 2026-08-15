@@ -112,7 +112,7 @@ def prepare_squad(data_dir: str = './data'):
 
     # 下载 SQuAD 2.0
     print("\n SQuAD 2.0 ...")
-    dataset = load_dataset('squad_v2', cache_dir=str(data_path))
+    dataset = load_dataset('rajpurkar/squad_v2', cache_dir=str(data_path))
 
     train_dataset = dataset['train']
     dev_dataset = dataset['validation']

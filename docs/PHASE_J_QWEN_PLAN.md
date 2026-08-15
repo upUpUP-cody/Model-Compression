@@ -1,8 +1,11 @@
 # Phase J — Qwen / SQuAD 规划（仅文档，不实现）
 
-> 状态：规划占位 · **不下载权重 · 不写 Transformer 剪枝代码**  
-> 视觉域主结论见 [EVIDENCE_PACK.md](EVIDENCE_PACK.md) / [WORK_LOG.md](WORK_LOG.md)  
+> 状态：规划已完成 · **Phase K 冒烟已跑通（2026-08-15）**
+> **Phase K 执行计划**：[PHASE_K_QWEN_PLAN.md](PHASE_K_QWEN_PLAN.md)
+> 模型锁定：`Qwen/Qwen2.5-1.5B-Instruct`；大文件根目录：`/mnt/data`（软链 `llm_data/`）
+> 视觉域主结论见 [EVIDENCE_PACK.md](EVIDENCE_PACK.md) / [WORK_LOG.md](WORK_LOG.md)
 > 总路线：[PROJECT_PLAN.md](../PROJECT_PLAN.md) Phase J/K · 执行入口：[P2_EXECUTION_PLAN.md](P2_EXECUTION_PLAN.md) §P2.9
+> 冒烟入口：`source scripts/env_llm.sh && python experiments/run_qwen_squad_eval.py --config configs/qwen_squad_smoke.yaml`
 
 ---
 
@@ -22,7 +25,7 @@
 
 | 项 | 规划默认 |
 |----|----------|
-| 模型 | 小型 Qwen 指令/基座变体（具体 checkpoint 在 Phase K 开代码前再锁定） |
+| 模型 | **已锁定** `Qwen/Qwen2.5-1.5B-Instruct`（本地 `/mnt/data/models/Qwen2.5-1.5B-Instruct`） |
 | 任务 | SQuAD 2.0（或同协议子集）；主指标 **F1 / EM** |
 | 剪枝单元 | attention **head**；FFN **中间维**（物理缩小，非掩码稀疏） |
 | 数据协议 | train / validation / test 严格隔离；选择只看 validation；test 仅 freeze 后一次 |
@@ -50,22 +53,24 @@ CIFAR 已定稿为 **regime-dependent**（≤4x iterative 略稳；≥8x search 
 | 证据 | Phase H/I 文档审查通过；CIFAR 主表与机制消融可读 |
 | 批准 | 用户确认扩盘并同意开始下载后，才进入 Phase K |
 
-**当前**：只维护本文档；**禁止** `huggingface-cli download` / 拉取大模型。
+**当前**：磁盘门禁已满足（`/mnt/data`）；Phase K 已开代码。权重与缓存**只写** `/mnt/data`，不进 git。
 
 ---
 
-## 5. Phase K 实现清单（预告，本阶段不执行）
+## 5. Phase K 实现清单（进行中）
 
-1. 数据：SQuAD 划分与 validation 选择器  
-2. 后端：Transformer 物理剪枝（head / FFN 中间维）+ 参数量审计  
-3. 搜索：复用 controller / frontier / history 协议；适配新候选空间  
-4. 对照：E1/E2 级 dense / oneshot / iterative / search  
+1. 数据：SQuAD 划分与 validation 选择器
+2. 后端：Transformer 物理剪枝（head / FFN 中间维）+ 参数量审计
+3. 搜索：复用 controller / frontier / history 协议；适配新候选空间（本轮冒烟之后）
+4. 对照：先 dense / oneshot 冒烟；iterative / search 接线留后续
 5. 产物：manifest / fingerprint / frozen test report（与 P1/P2 同构）
+
+环境入口：`source scripts/env_llm.sh`
 
 ---
 
 ## 6. 验收（Phase J）
 
-- [√] 本文可独立阅读，含单元、指标、对照、门禁  
-- [√] PROJECT_PLAN / P2 已链到本文  
-- [×] 仓库内出现新增大模型权重或缓存 — **不允许**
+- [√] 本文可独立阅读，含单元、指标、对照、门禁
+- [√] PROJECT_PLAN / P2 已链到本文
+- [√] Phase K 启动后权重落在 `/mnt/data`，不提交进仓库
