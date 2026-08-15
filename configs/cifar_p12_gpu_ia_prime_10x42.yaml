@@ -37,16 +37,16 @@ recovery:
   epochs: 2
   learning_rate: 0.001
 comparison:
-  methods: [dense_baseline, dense_small, oneshot_magnitude, oneshot_wanda, iterative_structured_level1, autonomous_search]
+  methods: [dense_baseline, iterative_structured_level1, autonomous_search]
   target_compression_ratio: 2.0
-  compression_targets: [1.5, 2.0, 4.0, 6.0, 8.0, 10.0]
+  compression_targets: [10.0]
   dense_small_variant: small
   wanda_batches: 1
   recovery_epochs: 2
   recovery_learning_rate: 0.001
 logging:
-  output_root: results/cifar_p12_comparison_gpu_sweep_v3
+  output_root: results/cifar_p12_ia_prime_validate
   use_wandb: false
-run_label: cifar_p12_gpu_sweep_v3
+run_label: cifar_p12_ia_prime_validate
 seed: 42
-seeds: [42, 43, 44]
+seeds: [42]

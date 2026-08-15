@@ -19,16 +19,22 @@ class LoRALinear(nn.Module):
         self.base = base
         self.rank = rank
         self.scaling = alpha / max(rank, 1)
-        self.lora_a = nn.Parameter(torch.zeros(rank, base.in_features))
-        self.lora_b = nn.Parameter(torch.zeros(base.out_features, rank))
+        device = base.weight.device
+        dtype = base.weight.dtype
+        self.lora_a = nn.Parameter(torch.zeros(rank, base.in_features, device=device, dtype=dtype))
+        self.lora_b = nn.Parameter(torch.zeros(base.out_features, rank, device=device, dtype=dtype))
         nn.init.kaiming_uniform_(self.lora_a, a=5 ** 0.5)
         nn.init.zeros_(self.lora_b)
         for parameter in self.base.parameters():
             parameter.requires_grad_(False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        delta = F.linear(F.linear(x, self.lora_a), self.lora_b) * self.scaling
-        return self.base(x) + delta
+        base_out = self.base(x)
+        device_type = x.device.type if x.device.type in {"cuda", "cpu"} else "cuda"
+        with torch.amp.autocast(device_type=device_type, enabled=False):
+            x_fp = x.float()
+            delta = F.linear(F.linear(x_fp, self.lora_a.float()), self.lora_b.float()) * float(self.scaling)
+        return base_out + delta.to(dtype=base_out.dtype)
 
 
 class LoRAConv2d(nn.Module):
@@ -37,16 +43,28 @@ class LoRAConv2d(nn.Module):
         self.base = base
         self.rank = rank
         self.scaling = alpha / max(rank, 1)
-        self.lora_a = nn.Parameter(torch.zeros(rank, base.in_channels, 1, 1))
-        self.lora_b = nn.Parameter(torch.zeros(base.out_channels, rank, 1, 1))
+        device = base.weight.device
+        dtype = base.weight.dtype
+        self.lora_a = nn.Parameter(
+            torch.zeros(rank, base.in_channels, 1, 1, device=device, dtype=dtype)
+        )
+        self.lora_b = nn.Parameter(
+            torch.zeros(base.out_channels, rank, 1, 1, device=device, dtype=dtype)
+        )
         nn.init.kaiming_uniform_(self.lora_a, a=5 ** 0.5)
         nn.init.zeros_(self.lora_b)
         for parameter in self.base.parameters():
             parameter.requires_grad_(False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        delta = F.conv2d(F.conv2d(x, self.lora_a), self.lora_b) * self.scaling
-        return self.base(x) + delta
+        base_out = self.base(x)
+        device_type = x.device.type if x.device.type in {"cuda", "cpu"} else "cuda"
+        with torch.amp.autocast(device_type=device_type, enabled=False):
+            x_fp = x.float()
+            # 1x1 down-project, then 1x1 up-project with base stride for spatial alignment
+            mid = F.conv2d(x_fp, self.lora_a.float())
+            delta = F.conv2d(mid, self.lora_b.float(), stride=self.base.stride) * float(self.scaling)
+        return base_out + delta.to(dtype=base_out.dtype)
 
 
 def _wrap_lora_modules(model: nn.Module, rank: int, alpha: float) -> List[str]:

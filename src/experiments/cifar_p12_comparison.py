@@ -247,6 +247,12 @@ def _iterative_structured(
     model = copy.deepcopy(source_model)
     recovery_seconds = 0.0
     stages = []
+    iterative_epochs = comparison.get("iterative_recovery_epochs")
+    recovery_config = dict(config.get("recovery") or {})
+    if iterative_epochs is not None:
+        recovery_config["epochs"] = int(iterative_epochs)
+    stage_config = dict(config)
+    stage_config["recovery"] = recovery_config
     for stage, ratio_config in enumerate(stage_ratios, start=1):
         current_backend = resolve_pruning_backend(model, model_type)
         ratios = _layer_ratios(model, ratio_config, model_type)
@@ -256,7 +262,7 @@ def _iterative_structured(
         model = current_backend.create_pruned_model_by_indices(keep_indices).to(resolve_device(device))
         start = time.perf_counter()
         model, history = run_recovery(
-            model, train_loader, validation_loader, config, teacher_model=source_model
+            model, train_loader, validation_loader, stage_config, teacher_model=source_model
         )
         recovery_seconds += time.perf_counter() - start
         stages.append({
@@ -264,6 +270,7 @@ def _iterative_structured(
             "layer_ratios": ratios,
             "layer_keep_indices": keep_indices,
             "recovery": history,
+            "recovery_epochs": int(recovery_config.get("epochs", 0)),
         })
     merged_keep_indices: Dict[str, list[int]] = {}
     for stage_record in stages:
@@ -300,6 +307,8 @@ def _autonomous(
         enable_two_layer_candidates=bool(search_config.get("enable_two_layer_candidates", False)),
         recovery_top_k=int(search_config.get("recovery_top_k", 1)),
         frontier_archive=frontier,
+        target_compression_ratio=float(config.get("comparison", {}).get("target_compression_ratio", 0.0)) or None,
+        max_step_compression=float(search_config.get("max_step_compression", 1.75)),
     )
     history_dict = history.to_dict()
     keep_indices: Dict[str, list[int]] = {}

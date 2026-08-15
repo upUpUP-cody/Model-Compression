@@ -5,6 +5,7 @@ import yaml
 
 from src.experiments.compression_targets import (
     apply_compression_target,
+    derive_uniform_prune_ratio,
     ensure_compression_target,
     parameter_count,
 )
@@ -19,6 +20,7 @@ CIFAR_TARGET_CONFIGS = [
     "configs/cifar_p12_gpu_multiseed.yaml",
     "configs/cifar_p12_gpu_sweep.yaml",
     "configs/cifar_p12_gpu_smoke.yaml",
+    "configs/cifar_recovery_ablation.yaml",
 ]
 
 
@@ -62,6 +64,14 @@ def test_apply_compression_target_hits_two_four_and_ten_x():
         assert updated["comparison"]["layer_ratios_derived_for"] == target
         actual = _actual_compression(oneshot)
         assert low <= actual <= high, f"target {target}x actual {actual:.3f}x"
+
+
+def test_derive_uniform_prune_ratio_matches_layer_dict():
+    model = build_model_from_config({"model": dict(RESNET_CFG)})
+    ratio = derive_uniform_prune_ratio(model, "resnet_cifar", 2.0)
+    ratios = {name: ratio for name in resolve_pruning_backend(model, "resnet_cifar").prunable_layer_names()}
+    actual = _actual_compression(ratios)
+    assert 1.7 <= actual <= 2.3
 
 
 def test_ensure_compression_target_is_idempotent():

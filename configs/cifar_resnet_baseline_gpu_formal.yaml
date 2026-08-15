@@ -19,6 +19,11 @@ hardware:
   cudnn_benchmark: false
   tf32: false
   cpu_threads: 1
+training:
+  epochs: 100
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  save_path: checkpoints/cifar_resnet18_baseline_formal100.pth
 controller:
   max_accuracy_drop_points: 100.0
   max_failures: 3
@@ -28,26 +33,13 @@ search:
   max_iterations: 1
   candidates_per_round: 1
   candidate_ratios: [0.3]
-  cheap_eval_samples: 32
+  cheap_eval_samples: 64
 recovery:
   level: 1
-  epochs: 3
+  epochs: 0
   learning_rate: 0.001
-  lora_rank: 2
-  lora_alpha: 4.0
-  distill_temperature: 2.0
-  distill_alpha: 0.5
-comparison:
-  methods: [oneshot_wanda]
-  target_compression_ratio: 2.0
-  wanda_batches: 2
-  recovery_epochs: 3
-  recovery_learning_rate: 0.001
-  recovery_levels: [1, 2, 3]
-  report_test: true
 logging:
-  output_root: results/cifar_recovery_ablation_multiseed
+  output_root: results/cifar_baseline_formal100
   use_wandb: false
-run_label: cifar_recovery_ablation_multiseed
+run_label: cifar_resnet_baseline_gpu_formal100
 seed: 42
-seeds: [42, 43, 44]

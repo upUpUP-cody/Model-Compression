@@ -326,3 +326,199 @@ def test_cnn_search_proposes_uniform_all_layer_candidate_first():
     assert len(candidates) == 1
     assert set(candidates[0].ratios_dict()) == set(backend.prunable_layer_names())
     assert all(ratio == 0.5 for ratio in candidates[0].ratios_dict().values())
+
+
+def make_cnn_loader():
+    torch.manual_seed(3)
+    return DataLoader(
+        TensorDataset(torch.randn(8, 3, 32, 32), torch.randint(0, 10, (8,))),
+        batch_size=4,
+        shuffle=False,
+    )
+
+
+def cnn_importance(model, loader, device):
+    backend = CnnBackend(model)
+    return {
+        name: torch.arange(backend.output_size(name), 0, -1, dtype=torch.float32)
+        for name in backend.prunable_layer_names()
+    }
+
+
+def test_search_stops_when_target_compression_reached():
+    source = resnet18_cifar(base_width=16)
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=5.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=cnn_importance,
+        recovery_fn=recovery,
+        model_type="resnet_cifar",
+    )
+    accepted, history = search.run(
+        source,
+        make_cnn_loader(),
+        make_cnn_loader(),
+        max_iterations=6,
+        candidate_ratios=(0.5,),
+        candidates_per_round=1,
+        cheap_eval_samples=5,
+        recovery_epochs=0,
+        target_compression_ratio=2.0,
+        max_step_compression=1.75,
+    )
+    accept_events = [event for event in history.events if event.get("final_action") == "accept"]
+    stop_events = [
+        event for event in history.events if event.get("reason") == "target_compression_reached"
+    ]
+    final = source_parameter_count(source) / max(source_parameter_count(accepted), 1)
+    assert accept_events
+    assert final >= 2.0 * 0.85
+    assert final <= 2.0 * 1.15 + 1e-6
+    assert stop_events
+    assert stop_events[0]["target_compression_ratio"] == 2.0
+    assert history.accepted_parameter_count == source_parameter_count(accepted)
+
+
+def test_target_compression_ratio_must_exceed_one():
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=5.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=importance,
+        recovery_fn=recovery,
+    )
+    with pytest.raises(ValueError, match="target_compression_ratio"):
+        search.run(
+            make_model(),
+            make_loader(),
+            make_loader(),
+            max_iterations=1,
+            candidate_ratios=(0.5,),
+            candidates_per_round=1,
+            cheap_eval_samples=5,
+            recovery_epochs=0,
+            target_compression_ratio=1.0,
+        )
+
+
+def test_round_ratios_cap_step_below_full_target_for_cnn():
+    model = resnet18_cifar(base_width=16)
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=5.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=importance,
+        recovery_fn=recovery,
+        model_type="resnet_cifar",
+    )
+    from src.experiments.compression_targets import derive_uniform_prune_ratio
+
+    full = derive_uniform_prune_ratio(model, "resnet_cifar", 8.0)
+    step = derive_uniform_prune_ratio(model, "resnet_cifar", 1.75)
+    ratios = search._round_candidate_ratios(
+        current_model=model,
+        configured_ratios=(0.9,),
+        target_ratio=8.0,
+        current_compression=1.0,
+        max_step_compression=1.75,
+    )
+    assert ratios
+    assert max(ratios) <= step + 1e-3
+    assert max(ratios) < full - 0.05
+
+
+def test_incremental_search_reaches_target_with_step_cap():
+    source = resnet18_cifar(base_width=16)
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=50.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=cnn_importance,
+        recovery_fn=recovery,
+        model_type="resnet_cifar",
+    )
+    initial = source_parameter_count(source)
+    accepted, history = search.run(
+        source,
+        make_cnn_loader(),
+        make_cnn_loader(),
+        max_iterations=8,
+        candidate_ratios=(0.3,),
+        candidates_per_round=2,
+        cheap_eval_samples=5,
+        recovery_epochs=0,
+        target_compression_ratio=3.0,
+        max_step_compression=1.5,
+    )
+    final = initial / max(source_parameter_count(accepted), 1)
+    accept_events = [event for event in history.events if event.get("final_action") == "accept"]
+    assert len(accept_events) >= 2
+    assert abs(final - 3.0) / 3.0 <= 0.15 or final >= 3.0
+    assert final <= 3.0 * 1.15 + 1e-6
+    for event in accept_events:
+        assert float(event["compression_ratio"]) <= 3.0 * 1.15 + 1e-6
+
+
+def test_target_mode_does_not_fallback_to_configured_ratios():
+    model = resnet18_cifar(base_width=16)
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=5.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=importance,
+        recovery_fn=recovery,
+        model_type="resnet_cifar",
+    )
+    # Near target: remaining step is tiny; must not fall back to configured 0.9.
+    ratios = search._round_candidate_ratios(
+        current_model=model,
+        configured_ratios=(0.9,),
+        target_ratio=4.0,
+        current_compression=3.97,
+        max_step_compression=1.75,
+    )
+    assert all(ratio < 0.9 - 1e-3 for ratio in ratios)
+
+
+def test_overshoot_candidates_are_filtered_before_accept():
+    source = resnet18_cifar(base_width=16)
+    search = AutonomousSearch(
+        controller=HeuristicController(max_accuracy_drop_points=50.0),
+        critic=FixedCritic(),
+        evaluator=evaluator,
+        importance_fn=cnn_importance,
+        recovery_fn=recovery,
+        model_type="resnet_cifar",
+    )
+    initial = source_parameter_count(source)
+    accepted, history = search.run(
+        source,
+        make_cnn_loader(),
+        make_cnn_loader(),
+        max_iterations=4,
+        candidate_ratios=(0.9,),
+        candidates_per_round=3,
+        cheap_eval_samples=5,
+        recovery_epochs=0,
+        target_compression_ratio=2.0,
+        max_step_compression=10.0,
+    )
+    final = initial / max(source_parameter_count(accepted), 1)
+    assert final <= 2.0 * 1.15 + 1e-5
+    for event in history.events:
+        if event.get("final_action") == "accept":
+            assert float(event["compression_ratio"]) <= 2.0 * 1.15 + 1e-5
+        for candidate in event.get("candidates") or []:
+            if candidate.get("final_reason") == "target_compression_overshoot":
+                assert float(candidate.get("candidate_compression_ratio", 0.0)) > 2.0 * 1.15
+
+
+def test_effective_max_step_compression_lowcomp_boost():
+    from src.autonomous_search import effective_max_step_compression
+
+    assert effective_max_step_compression(1.75, 2.0) == 2.0
+    assert effective_max_step_compression(1.75, 4.0) == 1.75  # 4x keeps incremental path
+    assert effective_max_step_compression(1.75, 8.0) == 1.75
+    assert effective_max_step_compression(1.75, None) == 1.75
+    assert effective_max_step_compression(5.0, 2.0) == 5.0

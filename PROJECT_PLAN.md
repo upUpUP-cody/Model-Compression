@@ -1,16 +1,21 @@
 # Autonomous Lottery Ticket Discovery - 项目实施计划
 
-> 本文件是项目的完整长期路线图、阶段目标和全局成功标准。当前 P0/P1/P2 的执行顺序、研究协议和阶段验收条件见 [EXECUTION_PLAN.md](EXECUTION_PLAN.md)。
+> 本文件是项目的完整长期路线图、阶段目标和全局成功标准。当前 P0/P1/P2 的执行顺序、研究协议和阶段验收条件见 [EXECUTION_PLAN.md](EXECUTION_PLAN.md)。详细实验结论见 [docs/WORK_LOG.md](docs/WORK_LOG.md) / [docs/WORK_LOG_BRIEF.md](docs/WORK_LOG_BRIEF.md)。
 >
-> 更新状态：[完成] MVP 核心流程已完成并通过自动化测试；MNIST CPU 冒烟实验已完成；MNIST P1.2 GPU smoke/formal 与多 seed/压缩率扫描已完成。论文级 LLM 实验、LoRA/自蒸馏恢复和 CIFAR/ResNet 扩展仍未实施。
+> **更新状态（2026-08-14）**
 >
-> 最近验证：`python -m pytest tests -q` -> `96 passed, 1 skipped`。
+> - **已完成**：MVP 核心流程；MNIST CPU 冒烟；MNIST P1.2 GPU（smoke/formal/multiseed/6×3 sweep）；**CIFAR-10 + ResNet-18 P1.2**（smoke/formal/multiseed/sweep_v2）；搜索门禁（recovery 后再 decide）+ **目标压缩止损**；恢复消融 Level 1/2/3（单 seed）。
+> - **现阶段不做**：Qwen/SQuAD **仅规划占位，不实现**；CIFAR 100 epoch 正式关键对照已完成（见 Phase I），全压缩率矩阵仍可按需扩展。
+> - **验证**：`python -m pytest tests -q` → **121 passed, 1 skipped**（2026-08-14）。
+> - **关键产物（不进 Git）**：`results/p12_comparison_gpu_sweep/`（MNIST）；`results/cifar_p12_comparison_gpu_sweep_v2/`；`results/cifar_recovery_ablation/`。
 >
-> GPU 产物：`results/p12_comparison_gpu_sweep/`（6 压缩率 x 3 seed）、`results/p12_comparison_gpu_multiseed/`。
+> 主机参考：RTX 4090 Linux，torch 2.x + CUDA。
 
 ## 项目概述
 
 本项目旨在复现和实现《Autonomous Lottery Ticket Discovery》论文中提出的自主彩票发现方法，该方法能够在不依赖预训练父网络的情况下，自主发现高性能的稀疏神经网络子结构。
+
+当前研究叙事已从「先跑通 MNIST MLP」推进到「同一 train/val/test 协议迁移到 CIFAR ResNet」；自主搜索相对 one-shot / 迭代剪枝的价值，必须在 **同压缩预算** 下解读（见 WORK_LOG §2.8）。
 
 ---
 
@@ -55,13 +60,13 @@
 - **任务**: 下载并预处理基准数据集
 - **数据集选择** (按难度递增):
   1. **MNIST**: 简单图像分类 (用于初期验证) [完成] **[CPU 友好，自动下载]**
-  2. **CIFAR-10**: 图像分类 [建议 GPU] **[CPU 可训练但慢，建议 GPU]**
-  3. **SQuAD 2.0**: 问答任务 (论文主要基准) [必须 GPU] **[必须 GPU，CPU 不可行]**
+  2. **CIFAR-10**: 图像分类 [完成] **[已在 RTX 4090 跑通 P1.2]**
+  3. **SQuAD 2.0**: 问答任务 (论文主要基准) [必须 GPU] **[P3 规划占位，现阶段不实现]**
   4. **MMLU**: 多任务语言理解 (可选) [必须 GPU] **[必须 GPU]**
 - **产出**: 
   - `data/mnist/` 或 `data/cifar10/`
-  - `data/squad/` (train.json, dev.json)
-  - 数据加载器脚本 `src/utils/data_loader.py`
+  - `data/squad/` (train.json, dev.json) — 未准备
+  - 数据加载器：`src/utils/data_loader.py`（含 CIFAR train/val split + `split_hash`）
 
 ---
 
@@ -72,19 +77,20 @@
 - **任务**: 构建并训练完整的密集神经网络作为性能基准
 - **模型选择**:
   - **简单**: 3-5 层 MLP (用于 MNIST) [完成] **[CPU 可运行]**
-  - **中等**: ResNet-18/50 (用于 CIFAR-10) [建议 GPU] **[需要 GPU，CPU 训练极慢 10-100x]**
-  - **复杂**: BERT-base 或 Qwen-0.5B (用于 SQuAD) [必须 GPU] **[必须 GPU ≥8GB，CPU 不可行]**
-- **实现文件**: `src/models/dense_baseline.py`
+  - **中等**: ResNet-18 (用于 CIFAR-10) [完成] **[已在 RTX 4090 跑通；项目内 `src/models/resnet_cifar.py`]**
+  - **复杂**: BERT-base 或 Qwen-0.5B (用于 SQuAD) [必须 GPU] **[P3 规划占位，现阶段不实现]**
+- **实现文件**: `src/models/dense_baseline.py`、`src/models/resnet_cifar.py`
 - **验证指标**:
   - 记录 baseline 准确率/F1 分数
   - GPU 内存占用
   - 推理延迟
   - 参数量
+  - CIFAR smoke 基线约 validation 88.86% / test 87.88%（20 epoch，非论文级 100+ epoch）
 
 #### 步骤 A.2: 实现结构化剪枝算子
-- **状态**: [完成] 已完成（物理结构裁剪、BatchNorm 和下游 Linear 同步更新）
+- **状态**: [完成] MLP 物理裁剪 + **ResNet BasicBlock 内 conv1** 结构化剪枝（残差 I/O 不变）
 - **任务**: 实现论文中的结构化剪枝方法
-- **实现文件**: `src/pruning/structured_pruning.py`
+- **实现文件**: `src/pruning/structured_pruning.py`、`src/pruning/cnn_structured_pruning.py`、`src/pruning/pruning_backend.py`
 - **核心功能**:
   ```python
   class StructuredPruning:
@@ -129,7 +135,7 @@
 ### **阶段 B: 前沿分析与候选生成 (预计 5-7 天)**
 
 #### 步骤 B.1: 实现 Capability Frontier Profiling
-- **状态**: [未开始] 未完成（当前 MVP 使用能力约束和参数量判断，尚未实现独立 frontier 模块）
+- **状态**: [完成] `ParetoFrontier` / `FrontierPoint` 已实现并接入自主搜索（validation accuracy vs 真实参数量）；独立 profiling 实验脚本可按需复用
 - **任务**: 定义并计算压缩前沿
 - **实现文件**: `src/evaluation/frontier.py`
 - **核心概念**:
@@ -203,43 +209,21 @@
   ```
 
 #### 步骤 C.3: Level 2 - LoRA 前沿数据恢复
-- **状态**: [未开始] 未开始（需 GPU 优先环境）
-- **任务**: 使用论文提出的 LoRA 方法恢复
-- **实现文件**: `src/recovery/lora_recovery.py`
-- **硬件需求**: [建议 GPU] **[建议 GPU，CPU 训练慢 5-20x]**
-- **步骤**:
-  1. **Frontier Mining**: 从历史搜索中收集前沿数据
-     - 存储 {稀疏度, 准确率, 配置} 元组
-  2. **LoRA 适配器**: 添加低秩适配层
-     ```python
-     class LoRALayer(nn.Module):
-         def __init__(self, in_features, out_features, rank=8):
-             self.lora_A = nn.Parameter(torch.randn(in_features, rank))
-             self.lora_B = nn.Parameter(torch.randn(rank, out_features))
-     ```
-  3. **训练**: 仅训练 LoRA 参数,冻结原始权重
+- **状态**: [完成] 接口已实现（Conv2d/Linear LoRA）；CIFAR 2x 同候选消融已跑通。**单 seed、仅 validation**；未证明系统优于 Level 1
+- **任务**: 使用 LoRA 适配器恢复剪枝后模型
+- **实现文件**: `src/recovery/lora_recovery.py`、`src/recovery/recovery_dispatch.py`
+- **硬件需求**: [建议 GPU] **[已在 RTX 4090 / fp16 验证]**
+- **要点**:
+  1. 冻结 base 权重，仅训练低秩适配器
+  2. 适配器与 base 同设备；AMP 下残差在 fp32 计算；stride 与 base 对齐
+  3. 报告部署体积时区分 pruned 基础参数与适配器开销
 
 #### 步骤 C.4: Level 3 - Self-Distillation
-- **状态**: [未开始] 未开始（需 GPU，并行父/子模型训练）
-- **任务**: 使用父网络作为教师进行知识蒸馏
+- **状态**: [完成] 接口已实现；CIFAR 2x 同候选消融已跑通。**单 seed**；未证明系统优于 Level 1
+- **任务**: 使用冻结 baseline 作为教师进行知识蒸馏
 - **实现文件**: `src/recovery/self_distillation.py`
-- **硬件需求**: [必须 GPU] **[必须 GPU，需同时加载父子网络，内存需求 2x]**
-- **损失函数**:
-  ```python
-  def distillation_loss(student_logits, teacher_logits, labels, T=2.0, alpha=0.5):
-      """
-      组合蒸馏损失和任务损失
-      """
-      soft_loss = F.kl_div(
-          F.log_softmax(student_logits / T, dim=1),
-          F.softmax(teacher_logits / T, dim=1),
-          reduction='batchmean'
-      ) * (T * T)
-      
-      hard_loss = F.cross_entropy(student_logits, labels)
-      
-      return alpha * soft_loss + (1 - alpha) * hard_loss
-  ```
+- **硬件需求**: [建议 GPU] **[已在 RTX 4090 验证]**
+- **损失函数**: soft KL（温度）+ hard CE；见实现与 `configs/cifar_recovery_ablation.yaml`
 
 ---
 
@@ -407,26 +391,39 @@ search:
 ### **阶段 F: 实验验证 (预计 7-10 天)**
 
 #### 步骤 F.1: 单元测试
-- **状态**: [完成]（46 个测试全部通过）
+- **状态**: [完成] 全量 `python -m pytest tests -q` → **121 passed, 1 skipped**（含 CNN 剪枝、压缩目标、搜索止损、LoRA/蒸馏等）
 - **任务**: 为每个模块编写测试
 - **测试文件**: `tests/test_*.py`
 - **覆盖**:
-  - 剪枝操作正确性
+  - 剪枝操作正确性（MLP + ResNet conv1）
   - 敏感度计算准确性
-  - 恢复策略收敛性
-  - 控制器决策逻辑
+  - 恢复策略与 dispatch
+  - 控制器决策逻辑与搜索止损
 
-#### 步骤 F.2: 小规模验证实验
-- **状态**: [完成]（MNIST CPU 一轮搜索冒烟已完成，产物已生成）
-- **任务**: 在 MNIST 上验证完整流程
-- **实验脚本**: `experiments/exp_mnist_baseline.py`
+#### 步骤 F.2: 小规模验证实验（MNIST）
+- **状态**: [完成] MNIST CPU 冒烟 + **MNIST P1.2 GPU** smoke/formal/3-seed/6×3 sweep
+- **任务**: 在 MNIST 上验证完整流程与六方法对照
+- **实验脚本**: `experiments/run_p12_comparison.py`、`experiments/run_p12_multiseed.py`
 - **验证点**:
-  - Dense baseline 达到 >98% 准确率
-  - One-shot pruning 到 90% 稀疏度后准确率
-  - 自主搜索恢复到 >95% 准确率
+  - Dense baseline 与 dense_small（从零训练）协议正确
+  - One-shot 高压缩崩溃（负结果保留）
+  - 迭代 / 自主搜索在高压缩下仍接近 baseline（约 97–98%）
 
-#### 步骤 F.3: 复现论文实验 E1
-- **状态**: [未开始]（需要 GPU 和大模型实验环境）
+#### 步骤 F.2b: CIFAR-10 + ResNet-18 P1.2（P2）
+- **状态**: [完成] 协议与主证据已齐；详见 WORK_LOG §2.2–2.8 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md)
+- **任务**: 同一六方法协议迁移到 CNN
+- **要点**:
+  - 只剪 BasicBlock 内 `conv1`；残差 I/O 宽度不变
+  - `target_compression_ratio` 推导全部 prunable conv1；搜索 `target_compression_reached` 止损
+  - 产物：`results/cifar_p12_comparison_gpu_sweep_v2/`、`results/cifar_recovery_ablation/`
+- **结论边界（必须遵守）**:
+  - **1.5x / 2.0x**：search 与 iterative **同压缩**，可公平对照；iterative 略优或接近，**不能**声称 search 系统更优
+  - **≥4x**：search 常因 2 点能力门禁欠压；iterative 仍打到目标（10x test 约 83.4%）
+  - 旧 sweep search=1.00x 与 7.66x 过冲 formal **不得**与同压缩表混写
+  - 20 epoch 基线约 88% val，非正式论文级精度
+
+#### 步骤 F.3: 复现论文实验 E1（Qwen / SQuAD）
+- **状态**: [未开始] **P3 规划占位，现阶段不实现**（启动门禁见下文 Phase J/K）
 - **任务**: Dense Baseline 对比 (对应论文 Table 1)
 - **硬件需求**: [必须 GPU] **[必须 GPU ≥16GB，Qwen-0.5B 模型大，CPU 完全不可行]**
 - **实验配置**:
@@ -439,7 +436,7 @@ search:
   - Our method 90% sparsity: >75% F1
 
 #### 步骤 F.4: 复现论文实验 E2
-- **状态**: [未开始]（需要 GPU 和多次完整训练）
+- **状态**: [未开始] **P3 规划占位**（需 GPU 和多次完整训练）
 - **任务**: 热稀疏度曲线 (对应论文 Figure 2)
 - **硬件需求**: [必须 GPU] **[必须 GPU ≥16GB，需要多次完整训练]**
 - **实验配置**:
@@ -447,20 +444,20 @@ search:
   - 记录每个稀疏度下的最佳准确率
 - **可视化**: 绘制 Pareto frontier
 
-#### 步骤 F.5: 复现论文实验 E3
-- **状态**: [未开始]
-- **任务**: One-shot vs Iterative 对比
-- **验证**: 自主方法优于传统迭代剪枝
+#### 步骤 F.5: One-shot vs Iterative vs Search 对照
+- **状态**: [部分完成] MNIST 与 CIFAR 六方法协议已跑；CIFAR sweep_v2 提供同压缩（1.5x/2.0x）与高压缩欠压边界
+- **任务**: 验证自主方法相对传统路径的表现
+- **验证**: **当前证据不支持**「CIFAR 上 search 系统优于 iterative」；高压缩主证据仍是 iterative Level-1
 
 #### 步骤 F.6: 消融实验
-- **状态**: [未开始]（LoRA 和自蒸馏恢复尚未实现）
+- **状态**: [部分完成] CIFAR 固定 2x Wanda 候选上 Level 1/2/3 已跑（`results/cifar_recovery_ablation/`）；缺多 seed / test 冻结
 - **任务**: 验证各组件的贡献
 - **对比组**:
-  1. 无恢复 (Level 0)
-  2. 仅重建 (Level 1)
-  3. LoRA 恢复 (Level 2)
-  4. 自蒸馏 (Level 3)
-  5. 完整方法
+  1. 无恢复 (Level 0) — oneshot 臂已覆盖
+  2. 仅重建 (Level 1) — [完成] 消融 + 迭代路径主证据
+  3. LoRA 恢复 (Level 2) — [完成] 单次消融接口验证
+  4. 自蒸馏 (Level 3) — [完成] 单次消融接口验证
+  5. 完整方法 — 搜索路径已有，但高压缩同预算仍受限
 
 ---
 
@@ -503,22 +500,25 @@ search:
 3. **持续集成**: 每完成一个步骤就运行已有测试
 
 ### 里程碑检查点
-- **Checkpoint 1**: 阶段 A 完成 → Dense baseline 训练成功
-- **Checkpoint 2**: 阶段 C.2 完成 → One-shot pruning + 简单恢复可运行
-- **Checkpoint 3**: 阶段 E.1 完成 → 端到端搜索循环可运行
-- **Checkpoint 4**: 阶段 F.2 完成 → MNIST 实验验证通过
-- **Checkpoint 5**: 阶段 F.3 完成 → 论文主实验复现
+- **Checkpoint 1**: 阶段 A 完成 → Dense baseline 训练成功 [完成]
+- **Checkpoint 2**: 阶段 C.2 完成 → One-shot pruning + 简单恢复可运行 [完成]
+- **Checkpoint 3**: 阶段 E.1 完成 → 端到端搜索循环可运行 [完成]
+- **Checkpoint 4**: 阶段 F.2 完成 → MNIST 实验验证通过 [完成]
+- **Checkpoint 4b**: 阶段 F.2b 完成 → CIFAR P1.2 + sweep_v2 / 消融 [完成]
+- **Checkpoint 5**: 阶段 F.3 完成 → 论文主实验（Qwen/SQuAD）复现 [未开始 / P3]
 
 ### 时间估算
-- **最小可行版本 (MVP)**: 阶段 0 + A + B + C.1-C.2 + E → 约 3-4 周
-- **完整实现**: 阶段 0-F → 约 6-8 周
-- **扩展版本**: 阶段 0-G → 约 8-10 周
+- **最小可行版本 (MVP)**: 阶段 0 + A + B + C.1-C.2 + E → **已完成**
+- **视觉域完整证据 (P1+P2)**: MNIST + CIFAR P1.2 → **已完成**
+- **论文 LLM 复现**: 阶段 F.3–F.4 → 待 Phase J/K，约数周（视数据与显存）
+- **扩展版本**: 阶段 G → 可选
 
 ### 技术难点预警
 1. **Frontier 计算**: 需要大量候选评估,计算成本高 [建议 GPU] **[GPU 推荐，CPU 耗时 10x+]**
-2. **LoRA 恢复**: 超参数敏感,需要细致调参 [建议 GPU] **[GPU 推荐]**
+2. **LoRA 恢复**: 超参数敏感；CIFAR 消融已通，系统优势未证明 [建议 GPU]
 3. **控制器设计**: 决策逻辑复杂,需多次迭代 [完成] **[CPU 可运行]**
-4. **大模型实验**: GPU 内存需求高 [必须 GPU] **[必须 GPU ≥24GB VRAM]**
+4. **同压缩对照**: 搜索多轮叠加会过冲；已用 `target_compression_reached` 止损；高压缩下能力门禁仍可能导致欠压
+5. **大模型实验**: GPU 内存需求高 [必须 GPU] **[必须 GPU ≥16–24GB VRAM]**
 
 ---
 
@@ -529,44 +529,42 @@ search:
 - [建议 GPU] **[建议 GPU]**: CPU 可运行但速度慢 5-100 倍，强烈建议使用 GPU
 - [必须 GPU] **[必须 GPU]**: CPU 环境不可行，必须使用 GPU
 
-### 当前硬件 (CPU only)
-**可以完成的任务:**
-- [完成] 阶段 0: 环境搭建（已完成）
-- [完成] 步骤 A.1: MNIST + MLP 模型训练
-- [完成] 步骤 A.2-A.3: 剪枝算子实现与测试
-- [完成] 阶段 B: 前沿分析与候选生成（逻辑实现）
-- [完成] 步骤 C.1-C.2: 基础恢复策略
-- [完成] 阶段 D: 控制器实现（纯逻辑）
-- [完成] 步骤 F.1-F.2: 单元测试和 MNIST 小规模验证
+### 当前硬件（RTX 4090 已可用）
+**已在本机/4090 完成的任务:**
+- [完成] 阶段 0–E：MVP 与 MNIST 路径
+- [完成] MNIST P1.2 GPU sweep
+- [完成] CIFAR ResNet-18 基线、P1.2 对照、sweep_v2、恢复消融
+- [完成] Level 2/3 恢复接口在 GPU/fp16 上的冒烟与消融
 
-**需要 GPU 的任务:**
-- [建议 GPU] CIFAR-10 训练 (CPU 可行但慢)
-- [必须 GPU] SQuAD/Qwen 实验 (必须 GPU ≥16GB)
-- [必须 GPU] 论文实验复现 E1-E3 (必须 GPU ≥16GB)
-- [必须 GPU] 大规模模型实验 (必须 GPU ≥24GB)
+**仍需规划 / 更大资源的任务:**
+- [必须 GPU] SQuAD/Qwen 实验 (必须 GPU ≥16GB) — **Phase J/K，现阶段不实现**
+- [√] 可选 CIFAR 100+ epoch 强基线再扫（Phase I 关键对照已完成）
 
 ### 建议策略
-**当前 CPU 环境:**
-1. 完成阶段 0-A（MNIST 验证）
-2. 实现所有算法逻辑和控制器
-3. 在小规模数据上验证完整流程
-
-**未来 GPU 扩展:**
-1. 使用 Google Colab / Kaggle (免费 GPU)
-2. 租用云 GPU (AutoDL/恒源云，~1-3元/小时)
-3. 本地安装 CUDA (如有 NVIDIA 显卡)
+1. **近端**：Phase H 证据包装（文档），不新开长实验除非明确需要
+2. **已完成**：Phase I CIFAR 加固
+3. **LLM**：仅当 Phase H 审查通过且数据/显存就绪后进入 Phase K 实现
 
 ---
 
 ## 成功标准
 
 ### 最低标准 (MVP)
-- [完成] Dense baseline 已具备 MNIST MLP 检查点；准确率阈值仍需单独核验记录
-- [未完成] One-shot pruning 到 90% 稀疏度可执行
-- [未完成] 简单恢复策略能提升 5-10% 准确率
-- [完成] 端到端搜索循环可运行完整
+- [完成] Dense baseline 已具备 MNIST MLP 检查点；准确率已在 P1.2 中记录
+- [完成] One-shot / 结构化剪枝可执行，高压缩负结果保留
+- [完成] Level 1 恢复能在 CIFAR/MNIST 上显著拉回剪枝后精度
+- [完成] 端到端搜索循环可运行完整（含审计历史）
 
-### 目标标准 (论文复现)
+### 视觉域目标标准 (P1 + P2，相对论文 LLM 目标的中间层)
+- [√] train/val/test 隔离协议在 MNIST 与 CIFAR 上可复现
+- [√] 同压缩预算下可比较 search vs iterative（CIFAR 1.5x–10x 正式全表）
+- [√] 物理结构化剪枝参数量可测（非掩码稀疏）
+- [√] 论文级 CIFAR 精度（100 epoch 正式基线 + 关键对照）— Phase I
+- [√] 压缩率 crossover 证据（≤4x iterative 略优/接近；≥8x search 同压缩更高）
+- [√] crossover 机制消融（10x=`path_and_gate`；8x=`gate_dominant`；4x=`inconclusive_close`）
+- [×] 证明 search **系统全面**优于 iterative — **当前证据不支持**（应为 regime-dependent）
+
+### 目标标准 (论文 LLM 复现)
 - [ ] 在 SQuAD 上达到论文报告的 F1 分数 (±2%)
 - [ ] 稀疏度-准确率曲线与论文 Figure 2 一致
 - [ ] 优于 One-shot Wanda baseline 至少 10%
@@ -601,12 +599,64 @@ search:
 
 ---
 
+## 后续大框架（Phase H / I / J / K）
+
+P0（搜索正确性）→ P1（MNIST P1.2）→ P2（CIFAR P1.2）**已完成**。后续不再从「阶段 0」起步，而按下列大框架推进。详细数字与「能写/不能写」见 [docs/WORK_LOG.md](docs/WORK_LOG.md)。
+
+```mermaid
+flowchart TD
+  done[P0_P1_P2_done] --> H[Phase_H_EvidencePack]
+  H --> I[Phase_I_Optional_CIFAR]
+  H --> J[Phase_J_Qwen_PlanOnly]
+  I --> J
+  J --> K[Phase_K_Implement_iff_gates]
+```
+
+### Phase H — 证据包装与论文叙事（近端默认下一步）
+
+- **状态**：[完成] 已交付 [`docs/EVIDENCE_PACK.md`](docs/EVIDENCE_PACK.md)
+- **性质**：文档为主，不默认新开长实验
+- **内容**：
+  - 从 WORK_LOG / sweep_v2 / 消融抽出协议图、同压缩表、负结果（oneshot 崩溃、search ≥4x 欠压）
+  - 固化「能写 / 不能写」清单（与 WORK_LOG §3 一致）
+- **产出**：证据索引 + 论文方法/实验/讨论提纲
+- **验收**：读者仅凭文档能复述协议与主结论，且不把欠压 search 与高压缩 iterative 混比
+
+### Phase I — CIFAR 加固（含正式全表，已完成）
+
+- [√] 高压缩同预算：增量逼近 + 过冲硬顶（I.A / I.A′）；sweep_v3 + outlier 短验证
+- [√] 更强基线（100 epoch）+ 关键对照 2x/10x × 3 seed（I.B）
+- [√] 恢复消融多 seed + test（I.C）
+- [√] **正式全表**：`formal100` × 1.5–10x × 3 seed（`results/cifar_p12_comparison_gpu_formal100_full/`）
+- [√] crossover 机制消融 10x（`path_and_gate`）+ 8x（`gate_dominant`）+ 4x 低压缩诊断（`inconclusive_close`）
+- [×] 勾选「search 系统全面优于 iterative」— **不做**（regime-dependent；全表仍是 crossover）
+- **不阻塞** Phase H；也不自动启动 Qwen 实现
+- 证据已写入 [`docs/EVIDENCE_PACK.md`](docs/EVIDENCE_PACK.md) / [`docs/WORK_LOG.md`](docs/WORK_LOG.md)
+
+### Phase J — Qwen/SQuAD 规划占位（对齐 P2.9，默认不写代码）
+
+- **状态**：[√] 规划文档已交付 [`docs/PHASE_J_QWEN_PLAN.md`](docs/PHASE_J_QWEN_PLAN.md)
+- 剪枝单元：attention head / FFN 中间维
+- 指标：F1 / EM；硬件：VRAM ≥16GB
+- **启动门禁**：Phase H 证据包审查通过 + 数据与显存就绪
+- **磁盘**：实现前须先提醒用户扩盘（Qwen 权重/缓存/多次 run 通常还需 **30G+** 空闲）
+- 本阶段只写接口草图与实验矩阵，**不实现** Transformer 剪枝 / SQuAD pipeline；**不下载**权重
+
+### Phase K — 仅当门禁满足后才实现
+
+- **开代码前**：先告知用户「要上 Qwen 了，请拓展磁盘」，确认空间后再下载模型与数据
+- E1/E2 级对照：dense / oneshot / iterative / search
+- 沿用 train/val/test 隔离与 **物理结构化剪枝**（非掩码稀疏）
+- 同压缩预算对照与审计产物要求与 P1/P2 一致
+
+---
+
 ## 下一步行动
 
-请确认:
-1. 是否从 **阶段 0** 开始实施?
-2. 初始目标模型选择: **MNIST + MLP** 还是直接 **CIFAR-10 + ResNet**?
-3. GPU 资源: 本地训练还是云端?
-4. 预计完成时间: MVP (4周) 还是完整版 (8周)?
+1. [√] formal100 全表 + 机制链；叙事定稿为 **regime-dependent**；「系统全面更优」仍 `[×]`
+2. [√] 预算对齐、一步复验与 4x 诊断（一步策略收窄为 `target<=2`）
+3. [√] Phase J 规划：[`docs/PHASE_J_QWEN_PLAN.md`](docs/PHASE_J_QWEN_PLAN.md)
+4. [√] 论文成果提纲：[`docs/PAPER_RESULTS_OUTLINE.md`](docs/PAPER_RESULTS_OUTLINE.md)
+5. **之后**：按成果提纲扩写论文章节；Phase K 仅在确认扩盘（约 30G+）后启动；不默认重跑全表
 
-确认后我将开始生成具体的代码框架。
+执行顺序与验收细节仍以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 为准；实验结论以 WORK_LOG 为准；写论文以 PAPER_RESULTS_OUTLINE 为准。

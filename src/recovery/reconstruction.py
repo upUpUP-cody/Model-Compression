@@ -95,6 +95,7 @@ class ReconstructionRecovery:
         if isinstance(epochs, bool) or not isinstance(epochs, int) or epochs < 0:
             raise ValueError("epochs must be a non-negative integer")
         history = {
+            "recovery_level": 1,
             "train_loss": [],
             "train_acc": [],
             "validation_loss": [],

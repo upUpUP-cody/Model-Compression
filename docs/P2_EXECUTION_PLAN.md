@@ -119,10 +119,13 @@ manifest 的 `runtime.inference_benchmark` 包含 `peak_allocated_bytes`、延�
 
 ## P2.9 Qwen/SQuAD（仅规划，不实现）
 
+详细规划见 [`docs/PHASE_J_QWEN_PLAN.md`](PHASE_J_QWEN_PLAN.md)。
+
 - Transformer 剪枝单元（head/FFN）
 - 指标：F1/EM
-- 硬件：>=16GB VRAM
-- **启动条件：** CIFAR P1.2 + recovery 消融通过审查
+- 硬件：>=16GB VRAM；Phase K 前磁盘建议 **30G+** 空闲
+- **启动条件：** CIFAR P1.2 + recovery 消融通过审查；**先扩盘再下载**
+- 本阶段只维护规划文档，不拉权重、不写实现
 
 ## 门禁
 

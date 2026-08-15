@@ -300,6 +300,8 @@ def _autonomous(
         enable_two_layer_candidates=bool(search_config.get("enable_two_layer_candidates", False)),
         recovery_top_k=int(search_config.get("recovery_top_k", 1)),
         frontier_archive=frontier,
+        target_compression_ratio=float(config.get("comparison", {}).get("target_compression_ratio", 0.0)) or None,
+        max_step_compression=float(search_config.get("max_step_compression", 1.75)),
     )
     return model, {
         "history": history.to_dict(),

@@ -45,8 +45,8 @@ comparison:
   recovery_epochs: 2
   recovery_learning_rate: 0.001
 logging:
-  output_root: results/cifar_p12_comparison_gpu_sweep_v3
+  output_root: results/cifar_p12_comparison_gpu_formal100_full
   use_wandb: false
-run_label: cifar_p12_gpu_sweep_v3
+run_label: cifar_p12_gpu_formal100_full
 seed: 42
 seeds: [42, 43, 44]

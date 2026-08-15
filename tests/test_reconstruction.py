@@ -43,6 +43,7 @@ def test_recovery_restores_best_validation_epoch_not_last_epoch():
     history = recovery.recover(make_loader(), make_loader(), epochs=2, verbose=False)
 
     assert history == {
+        "recovery_level": 1,
         "train_loss": [1.0, 2.0],
         "train_acc": [50.0, 50.0],
         "validation_loss": [0.3, 0.4],

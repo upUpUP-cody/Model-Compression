@@ -147,11 +147,14 @@ def verify_frozen_study(study_dir: Path, config: Dict[str, Any], checkpoint_sour
             raise ValueError("study runtime is missing GPU inference benchmark metadata")
 
     records = manifest.get("records")
-    if not isinstance(records, list) or len(records) != len(METHOD_NAMES):
-        raise ValueError("study must contain exactly six frozen result records")
+    expected_methods = list(config.get("comparison", {}).get("methods", METHOD_NAMES))
+    if not isinstance(records, list) or len(records) != len(expected_methods):
+        raise ValueError(
+            f"study must contain exactly {len(expected_methods)} frozen result records"
+        )
     methods = [record.get("method") for record in records if isinstance(record, dict)]
-    if len(methods) != len(METHOD_NAMES) or set(methods) != set(METHOD_NAMES):
-        raise ValueError("study frozen result methods do not match the P1.2 method set")
+    if len(methods) != len(expected_methods) or set(methods) != set(expected_methods):
+        raise ValueError("study frozen result methods do not match the configured method set")
     return manifest
 
 

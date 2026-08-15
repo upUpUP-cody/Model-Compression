@@ -4,13 +4,17 @@
 
 ## 当前状态
 
-- 已完成：CPU-first MNIST MLP 自主结构化剪枝 MVP，提交为 `e40ca88`。
-- 已完成：物理结构化剪枝、Cheap Critic、基础启发式控制器、自主搜索循环、CPU/GPU YAML 配置、实验产物记录和合成数据测试。
-- 已完成：MNIST P1.2 GPU smoke/formal study（RTX 4090）、多 seed 对照与 6 档压缩率扫描聚合。
-- **进行中：P2 CIFAR-10 + ResNet GPU 扩展**（详见 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md)）。
-- 历史验证：提交前曾运行 `python -m pytest tests -q`；P2 代码交付后需重新全量验证。
-- 当前边界：MNIST 路径保持 MLP-only；CIFAR/ResNet 结构化剪枝、P1.2 协议、LoRA/自蒸馏恢复已在 P2 分支实现中。
-- Qwen/SQuAD 论文实验仍为规划项，未启动实现。
+- 已完成：CPU-first MNIST MLP 自主结构化剪枝 MVP。
+- 已完成：物理结构化剪枝、Cheap Critic、基础启发式控制器、自主搜索循环、CPU/GPU YAML、实验产物记录与测试。
+- 已完成：MNIST P1.2 GPU smoke/formal、多 seed 与 6 档压缩率扫描。
+- **已完成：P2 CIFAR-10 + ResNet GPU 扩展**（协议、conv1-only 剪枝、sweep_v2 同压缩对照、恢复消融 L1/2/3）。详见 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 与 [docs/WORK_LOG.md](docs/WORK_LOG.md)。
+- 验证：`python -m pytest tests -q` → 121 passed, 1 skipped（2026-08-14）。
+- 当前边界：MNIST=MLP；CIFAR=ResNet conv1-only；搜索含门禁修复与 `target_compression_reached` 止损。
+- **下一步大框架**（见 [PROJECT_PLAN.md](PROJECT_PLAN.md)「后续大框架」）：
+  1. **Phase H**：证据包装 / 论文叙事 — **已交付** [docs/EVIDENCE_PACK.md](docs/EVIDENCE_PACK.md)
+  2. **Phase I**：CIFAR 加固 — **已完成**（含 formal100 全压缩率矩阵）
+  3. **Phase J**：Qwen/SQuAD **仅规划占位，不实现**
+  4. **Phase K**：仅当门禁满足后才实现 LLM 实验；**开代码前先提醒用户扩盘（建议 30G+ 空闲）**
 
 ## 研究协议
 

@@ -2,9 +2,9 @@
 
 > 用途：记录做了什么、关键结论与创新点。供论文/答辩/交接使用。
 > 对应精简版：[WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md)
-> 日期：2026-08-13（2.4–2.6：压缩比 / sweep / 搜索门禁，2026-08-14）
+> 日期：2026-08-13（2.4–2.8 + Phase H 证据包：2026-08-14）
 > 主机：RTX 4090 Linux，torch 2.13.0+cu130
-> 代码：`8b61c86`（搜索门禁：recovery 后再 decide）；sweep/formal 结果在 `results/`（不进 Git）
+> 代码：搜索门禁 + `target_compression_reached` 止损；sweep/formal/消融结果在 `results/`（不进 Git）
 
 ---
 
@@ -255,6 +255,309 @@
 
 Search 三轮均 `accept`：Cheap Critic 21.9% / 14.8% / 8.2%，恢复后 val 88.12 → 87.66 → 85.92。门禁 `compression_ratio > 1.05` 通过。同目标 2x 下 iterative 压缩更保守（停在 2.01x）但 test 略高；search 在多轮接受后压到 7.66x，test 85.13。旧 sweep 的 search=1.00x 结论作废。
 
+### 2.7 恢复消融 Level 1/2/3（2026-08-14）
+
+**做了什么**
+
+- 对齐 GPU 配置与 `target_compression_ratio: 2.0`（去掉手写单层 0.3）；runner 调用 `ensure_compression_target`
+- 固定同一 Wanda 剪枝候选，对比 Level 1 全参微调 / Level 2 LoRA / Level 3 自蒸馏（各 3 epoch）
+- 修复 LoRA：适配器与 base 同设备；AMP 下 LoRA 残差在 fp32 计算；stride 卷积与 base 对齐
+
+**命令**
+
+```bash
+./scripts/run_gpu.sh python experiments/run_cifar_recovery_ablation.py \
+  --config configs/cifar_recovery_ablation.yaml \
+  --checkpoint checkpoints/cifar_resnet18_baseline.pth
+```
+
+**产物**
+
+| 项 | 路径 |
+|----|------|
+| 目录 | `results/cifar_recovery_ablation/` |
+| JSON | `results/cifar_recovery_ablation/ablation_summary.json` |
+| 报告 | `results/cifar_recovery_ablation/ABLATION_REPORT.md` |
+
+墙钟约 **2.8 分钟**（含剪枝与三档恢复）。
+
+**设定**：baseline val **88.86%**；剪枝后（恢复前）val **23.32%**；实际压缩 **2.01x**（11,173,962 → 5,564,062）。
+
+| Level | 方法 | pruned 参数 | recovered 参数 | 恢复后 best val | 耗时 |
+|------|------|-------------|----------------|-----------------|------|
+| 1 | 全参微调 | 5,564,062 | 5,564,062 | **88.02%** | 32.3 s |
+| 2 | LoRA | 5,564,062 | 5,578,464（含适配器） | **89.78%** | 48.9 s |
+| 3 | 自蒸馏 | 5,564,062 | 5,564,062 | **89.16%** | 37.2 s |
+
+**结论**
+
+1. **压缩门禁通过**：2.01x 落在目标 2.0x ±15% 内；三档共用同一 `keep_indices`。
+2. **三档接口均可在 GPU/fp16 跑通**；相对剪枝后 23.32%，均大幅拉回。
+3. **本单次 run 中 Level 2/3 的 val 略高于 Level 1**（89.78 / 89.16 vs 88.02），且 Level 2/3 略高于 baseline 88.86%。这是 **单 seed、仅 validation、3 epoch** 的消融结果，**不能**据此宣称 LoRA/蒸馏系统优于全参微调。
+4. Level 2 的 `recovered_params` 含 LoRA 适配器（约 +14k），报告部署体积时应区分 pruned 基础参数与适配器开销。
+5. 迭代路径上 Level 1 仍是主证据；Level 2/3 已从「仅接口」升为「同候选可对比的一次消融」。
+
+### 2.8 同压缩预算 sweep_v2（2026-08-14）
+
+**问题**：门禁修复后的 2x formal 里 search 连 accept 三轮叠到 **7.66x**，与 iterative 的 **2.01x** 不可比。旧 sweep 的 search=1.00x 已作废。
+
+**修复**：[`src/autonomous_search.py`](../src/autonomous_search.py) 增加 `target_compression_ratio`；`accept` 后若 `compression >= target` 则 `stop` / `target_compression_reached`。CIFAR/MNIST `_autonomous` 均传入目标比。
+
+**2x 短验证**（`results/cifar_p12_comparison_gpu_stop_smoke/...`）：search 与 iterative 均为 **2.008x**，并出现 `target_compression_reached`（不再过冲到 7.66x）。
+
+**命令**
+
+```bash
+./scripts/run_gpu.sh python experiments/run_cifar_p12_multiseed.py \
+  --config configs/cifar_p12_gpu_sweep.yaml \
+  --checkpoint checkpoints/cifar_resnet18_baseline.pth --sweep
+```
+
+配置：`output_root=results/cifar_p12_comparison_gpu_sweep_v2`，6 档 × 3 seed，`recovery_epochs=2`。墙钟约 **29 分钟**。
+
+**产物**
+
+| 项 | 路径 |
+|----|------|
+| 根目录 | `results/cifar_p12_comparison_gpu_sweep_v2/` |
+| 聚合 JSON | `results/cifar_p12_comparison_gpu_sweep_v2/aggregate/aggregate_summary.json` |
+| 报告 | `results/cifar_p12_comparison_gpu_sweep_v2/AGGREGATE_REPORT.md` |
+
+**实际压缩（3 seed 均值）**
+
+| 目标 | oneshot / iterative | autonomous_search |
+|------|---------------------|-------------------|
+| 1.5x / 2.0x | 1.50x / 2.01x | **同档达标**（1.50x / 2.01x） |
+| 4.0x | 4.03x | 均值 **3.02x**（seed42=4.03；43/44=2.51） |
+| 6.0x–10.0x | 达标 | 常 **欠压**（部分 seed 停在 1.00x 或约 3x） |
+
+**Test acc mean±std（摘录，同目标）**
+
+| 目标 | oneshot_mag | oneshot_wanda | iterative | search |
+|------|-------------|---------------|-----------|--------|
+| 1.5x | 69.12±0.00 | 69.96±0.89 | **87.73±0.69** | 87.55±0.58 |
+| 2.0x | 45.80±0.00 | 22.23±1.21 | **87.43±0.33** | 86.95±0.55 |
+| 4.0x | 17.48±0.00 | 12.14±0.17 | **86.52±0.64** | 86.53±0.39（压缩未对齐） |
+| 10.0x | 10.53±0.00 | 11.33±0.21 | **83.42±0.39** | 86.95±0.66（压缩未对齐） |
+
+**结论**
+
+1. **过冲已消除**：达标 accept 后会止损；1.5x/2.0x 上 search 与 iterative **同压缩**，可公平对照。
+2. **同压缩（1.5x/2.0x）下 iterative 略优于或接近 search**（test 差约 0.2–0.5 点）；**不能**声称 search 系统优于 iterative。
+3. **≥4x 时 search 常因 2 点能力门禁拒掉全层激进候选而欠压**；此时 search 的高 test 来自更小压缩，**不得**与 iterative 的高压缩数字直接比优劣。
+4. 旧 sweep（search=1.00x）与 7.66x formal **不得**与本表混写。iterative 在真·高压缩上仍是主证据（10x test 约 83.4%）。
+
+### 2.9 Phase H 证据包（2026-08-14）
+
+交付 [`docs/EVIDENCE_PACK.md`](EVIDENCE_PACK.md)：协议图、MNIST/CIFAR 主表、消融、负结果与作废说明、能写/不能写、产物索引、论文提纲。旧 CIFAR smoke/旧 sweep/过冲 formal 目录已清理，历史数字以本日志为准。
+
+### 2.10 Phase I CIFAR 加固（2026-08-15）
+
+顺序：I.A 欠压修复 → sweep_v3 → I.A′ 边界加固 → I.B 100 epoch 正式基线 → I.C 多 seed 消融 → **正式全表**。
+
+#### I.A 增量逼近（修 sweep_v2 欠压）
+
+根因文档：[`docs/CIFAR_SEARCH_UNDERCOMPRESSION.md`](CIFAR_SEARCH_UNDERCOMPRESSION.md)。
+策略：保留 2 点门禁；`max_step_compression=1.75` 多轮逼近；`max_iterations` 提高。
+
+短验证（20 epoch 基线，seed42）：search **4.025x / 10.072x**（目标 ±15% 内）。
+
+**sweep_v3**（`results/cifar_p12_comparison_gpu_sweep_v3/`，不覆盖 v2）：多数 ≥4x 已同压缩可比；残留 outlier：`4x seed43` 过冲到 6.32x；`10x seed42` 欠压到 8.43x。
+
+#### I.A′ 压缩边界（过冲/欠压轻量修）
+
+1. target 模式下禁止回退全目标 `configured_ratios`（近目标时该 fallback 会过冲）。
+2. 候选压缩 `> target*1.15` 过滤。
+3. `max_iterations=12`。
+
+短验证：`4x seed43 → 4.025x`；`10x seed42 → 10.072x`（`results/cifar_p12_ia_prime_validate/`）。
+
+#### I.B 正式基线 100 epoch
+
+| 项 | 值 |
+|----|-----|
+| 配置 | `configs/cifar_resnet_baseline_gpu_formal.yaml` |
+| 权重 | `checkpoints/cifar_resnet18_baseline_formal100.pth`（不覆盖 20 epoch） |
+| 墙钟 | ~15.7 分钟（941s） |
+| Best val | **91.84%**（相对 20 epoch smoke ~88.86% val） |
+
+**关键对照**（2x + 10x × seeds 42/43/44）：`results/cifar_p12_comparison_gpu_formal100_key/`
+
+| 目标 | iterative comp / test | search comp / test | 同压缩 |
+|------|----------------------|--------------------|--------|
+| 2.0x | 2.01x / **90.66±0.12** | 2.01x / 90.31±0.52 | 是 |
+| 10.0x | 10.16x / 83.76±0.43 | **10.14x / 86.03±0.33** | 是 |
+
+dense_baseline test **90.36%**。同压缩下：2x iterative 略优；**10x search 高于 iterative**（约 +2.3 点）。仍不据此宣称 search「全面系统更优」。
+
+#### I.C 恢复消融多 seed
+
+产物：`results/cifar_recovery_ablation_multiseed/`（含 test；seeds 42/43/44；2.01x Wanda）
+
+| Level | val mean±std | test mean±std | 备注 |
+|------|--------------|---------------|------|
+| 1 | 87.93±0.87 | 87.25±0.82 | 全参微调；主路径 |
+| 2 | 90.04±0.07 | 89.22±0.09 | LoRA；recovered 参数含适配器 |
+| 3 | 89.64±0.42 | 88.51±0.28 | 自蒸馏；与 L1 同 pruned 参数量 |
+
+多 seed 下 L2/L3 test 均值高于 L1，但 L2 参数量略增；讨论须注明设定差异，避免写成无条件「系统更优」。
+
+#### 正式全表 formal100_full（2026-08-15）
+
+**产物**：`results/cifar_p12_comparison_gpu_formal100_full/`
+**配置**：`configs/cifar_p12_gpu_formal100_full.yaml`
+**设定**：正式基线；1.5/2/4/6/8/10 × seeds 42/43/44；I.A′ 搜索边界；墙钟约 **47 分钟**；盘约 **+1.9G**。
+
+**压缩验收**：全部 ≥4x search 落在目标 ±15%（无欠压/过冲 outlier）。
+
+**Test mean±std（同压缩可比）**
+
+| 目标 | iterative | search | 相对 |
+|------|-----------|--------|------|
+| 1.5x | 90.52±0.30 | **90.64±0.94** | 接近（search 略高，方差大） |
+| 2.0x | **90.66±0.12** | 90.31±0.52 | iterative 略优 |
+| 4.0x | **89.85±0.16** | 89.37±0.16 | iterative 略优 |
+| 6.0x | 88.22±0.38 | **88.25±0.56** | 持平 |
+| 8.0x | 86.67±0.16 | **87.40±0.97** | search 略优 |
+| 10.0x | 83.76±0.43 | **86.03±0.33** | search 明显更优（约 +2.3 点） |
+
+dense_baseline test **90.36%**。oneshot 在 ≥4x 仍崩溃（负结果保留）。
+
+**研究读法**：低–中压缩（约 ≤4x）iterative 略稳或略优；高压缩（约 ≥8x）search 同压缩下更强。这是 **压缩率相关的 crossover**，不是「search 全面系统更优」。smoke v3 / key / full 必须分列。
+
+#### 2.11 Crossover 机制消融（2026-08-15）
+
+**问题**：10x 上 search 为何高于一次剪到目标的方法？
+
+**产物**：`results/cifar_crossover_path_ablation/`
+**设定**：formal100 基线；目标 10x；seeds 42/43/44；同 Level-1、2 epoch 恢复预算。
+**臂**：
+1. **uniform**：Wanda 一次剪到 10x + L1
+2. **incremental_no_gate**：与 search 相同增量步长，但 `max_accuracy_drop_points=100`（门禁关闭）
+3. **search_gated**：复用 formal100_full 的 autonomous_search（增量 + 2 点门禁）
+
+| Arm | test mean±std | compression |
+|-----|---------------|-------------|
+| uniform | 82.66±0.72 | 10.16x |
+| incremental_no_gate | 84.78±0.60 | 10.22x |
+| search_gated | **86.03±0.33** | 10.14x |
+
+**Verdict：`path_and_gate`**
+- 增量路径相对 uniform 约 **+2.1** test 点
+- 2 点门禁相对无门禁增量再约 **+1.3** test 点
+- 两者都贡献；不是单一因素
+
+仍不勾「search 系统全面优于 iterative」（全表仍是 crossover）。
+
+#### 2.12 Crossover 稳健性消融（8x，2026-08-15）
+
+**问题**：10x 的 `path_and_gate` 是否只是极端压缩特例？
+
+**产物**：`results/cifar_crossover_path_ablation_8x/`
+**设定**：同 formal100 基线与三臂协议；目标 **8.0x**；seeds 42/43/44。
+**Search-gated**：复用 formal100_full 的 `ratio_8_seed_*`（不重跑）。
+**配置**：`configs/cifar_crossover_path_ablation_8x.yaml`
+
+| Arm | test mean±std | compression |
+|-----|---------------|-------------|
+| uniform | 85.76±0.81 | 8.06x |
+| incremental_no_gate | 85.96±0.46 | 8.14x |
+| search_gated | **87.40±0.97** | 8.08x |
+
+**Verdict：`gate_dominant`**
+- 增量路径相对 uniform 仅约 **+0.2** test 点（低于 1.0 点阈值）
+- 2 点门禁相对无门禁增量约 **+1.4** test 点
+- crossover 起点档（8x）上，**门禁选路是主贡献**；路径单独几乎不抬分
+
+**与 10x 对照（稳健性读法）**
+
+| 档 | path (no-gate − uniform) | gate (gated − no-gate) | verdict |
+|----|--------------------------|------------------------|---------|
+| 8x | ~+0.2 | ~+1.4 | `gate_dominant` |
+| 10x | ~+2.1 | ~+1.3 | `path_and_gate` |
+
+机制不是 10x 单点幻觉：两档上 **门禁都稳定贡献约 +1.3～1.4**；路径贡献随压缩加剧而变大（8x 可忽略 → 10x 显著）。仍不勾「search 系统全面优于 iterative」。
+
+#### 2.13 低压缩差距诊断（4x，2026-08-15）
+
+**问题**：全表上 4x iterative（89.85±0.16）略高于 search（89.37±0.16）——是缺路径/门禁，还是低压缩本就难分？
+
+**产物**：`results/cifar_crossover_path_ablation_4x/`（含 `PROCESS_COMPARE.md`）
+**配置**：`configs/cifar_crossover_path_ablation_4x.yaml`
+**设定**：同三臂协议；目标 **4.0x**；search_gated 复用 formal100_full `ratio_4_seed_*`。
+
+| Arm | test mean±std | compression |
+|-----|---------------|-------------|
+| uniform | 89.27±0.14 | 4.02x |
+| incremental_no_gate | 89.45±0.39 | 4.02x |
+| search_gated | 89.37±0.16 | 4.02x |
+
+**Verdict：`inconclusive_close`**（三臂两两差距均 <1.0 点）
+
+**Process（seed 42/43）**
+- search 均 3 次 accept：约 1.75x → 3.09x → 4.02x，无 reject
+- 最终 `layer_keep_indices` 与 **iterative_structured_level1 完全相同**（同结构、同参数量）
+- 因此 ~0.5 test 点差距更像 **恢复轨迹/优化差异**（多步恢复 vs 一次剪到目标+一次恢复），不是「缺门禁」或「选错层宽」
+
+**跨档机制表**
+
+| 档 | path | gate | verdict | 相对 iterative |
+|----|------|------|---------|----------------|
+| 4x | ~+0.2 | ~−0.1 | `inconclusive_close` | search 略低 ~0.5 |
+| 8x | ~+0.2 | ~+1.4 | `gate_dominant` | search 略高 |
+| 10x | ~+2.1 | ~+1.3 | `path_and_gate` | search 明显高 |
+
+**诊断结论**：低压缩上 path/gate 几乎不分胜负；主张应定为 **regime-dependent**。要把 `[×]` 改成系统全面更优，需改探索/恢复预算公平性后再关键复验——**不是**放宽 2pt 门禁。
+
+#### 2.14 恢复预算对齐（2026-08-15）
+
+**问题**：4x 上 search 累计约 6 epoch 恢复、iterative 仅 2 epoch——iterative 略优是否因为「恢复不够」？
+
+**产物**：`results/cifar_p12_budget_match_key/`（含 `BUDGET_REPORT.md`）
+**配置**：`configs/cifar_p12_budget_match_key.yaml`
+**设定**：formal100 基线；2x/4x × seeds 42/43/44；`iterative_recovery_epochs=6`；search 仍每 accept 2 epoch；方法含 dense 锚点。
+
+| target | iterative test | search test | delta (it−se) |
+|--------|----------------|-------------|---------------|
+| 2x | 90.56±0.07 | 90.18±0.43 | +0.38 |
+| 4x | 90.04±0.18 | 89.43±0.32 | +0.61 |
+
+相对 formal100（iterative 仅 2 epoch）：4x iterative 从 89.85→90.04（略升），search 基本不变。
+**结论**：抬高 iterative 预算后仍 ≥ search；低压缩差距 **不是**「iterative 恢复不够」。多步搜索轨迹假说保留。「系统全面更优」仍 `[×]`。
+
+#### 2.15 低压缩一步到目标（2026-08-15）
+
+**改动**：`target<=4` 时有效 `max_step_compression = max(configured, target)`（允许一轮逼近目标）；`target>4` 仍用 1.75。门禁仍 2pt。
+
+**产物**：`results/cifar_p12_lowcomp_step_key/`（含 `LOWCOMP_STEP_REPORT.md`）
+**配置**：`configs/cifar_p12_lowcomp_step_key.yaml`
+**设定**：formal100 基线；2/4/8/10 × seeds 42/43/44；iterative 仍 2 epoch 恢复。
+
+| target | iterative | search | delta (se−it) |
+|--------|-----------|--------|---------------|
+| 2x | 90.56±0.07 | **90.57±0.08** | +0.01 |
+| 4x | **89.27±0.15** | 88.87±0.11 | −0.39 |
+| 8x | 86.13±0.56 | **86.99±0.53** | +0.86 |
+| 10x | 84.14±0.72 | **85.60±0.15** | +1.46 |
+
+**读法**：
+- 2x 基本抹平；**4x 仍未达标**（且 search 相对 formal100 同档略降）
+- 8x/10x search 仍高于 iterative，高压缩优势未明显丢失
+- 一步策略 **不能**单独把「系统全面更优」翻成 `[√]`；regime-dependent 叙事保留
+
+#### 2.16 4x 一步变差诊断（2026-08-15）
+
+**产物**：`results/cifar_p12_lowcomp_step_key/FOURX_PROCESS_COMPARE.md`
+
+| seed | formal traj (n_accept) | lowcomp traj | widths formal==lowcomp==iterative | search test F→L |
+|------|------------------------|--------------|-------------------------------------|-----------------|
+| 42 | 1.75→3.09→4.02 (3) | 4.02 (1) | 是 | 89.52→88.81 |
+| 43 | 1.75→3.09→4.02 (3) | 4.02 (1) | 是 | 89.21→89.03 |
+| 44 | 1.75→3.09→4.02 (3) | 4.02 (1) | 是 | 89.39→88.78 |
+
+**结论**：最终层宽相同；变差来自 **缺少中间恢复**，不是选错结构。
+**代码跟进**：`effective_max_step_compression` 收窄为仅 `target<=2`（4x 起恢复增量路径）。不重跑全表；「系统全面更优」仍 `[×]`。
+
 ---
 
 ## 3. 创新点（写论文时可用的表述）
@@ -281,17 +584,25 @@ Search 三轮均 `accept`：Cheap Critic 21.9% / 14.8% / 8.2%，恢复后 val 88
 
 当前 **还不能声称** 的（避免写过头）：
 
-- CIFAR 上自主搜索已经系统优于迭代剪枝（单次 formal：search 7.66x / 85.13% test，iterative 2.01x / 88.01%；需同压缩预算对照后再下结论）
-- LoRA / 自蒸馏已经有效（只实现了接口）
-- 达到论文级 CIFAR 精度（20 epoch 基线约 88%，正式基线通常要 100+ epoch）
+- [×] CIFAR 上自主搜索已经**全面系统**优于迭代剪枝（formal100 全表：≤4x iterative 略优或接近；≥8x search 更高 → crossover）
+- [×] LoRA / 自蒸馏已无条件系统优于 Level 1
+- [×] 把 smoke（20 epoch）与正式全表混写为同一主结果
+
+**可以写进机制讨论的**：
+- [√] 高压缩优势可拆为 **增量路径** 与 **2 点门禁选路**；贡献随压缩率变化（4x 难分；8x 门禁主导；10x 路径+门禁），见 §2.11–2.13
+- [√] 低压缩（4x）search/iterative 最终结构可相同，小幅差距来自恢复轨迹而非层宽选择
+- [√] 4x 硬一步到目标会跳过中间恢复、同结构下 test 变差；一步策略仅适用于约 ≤2x（§2.16）
 
 ---
 
 ## 4. 下一步（按优先级）
 
-1. 恢复消融 Level 1/2/3（迭代路径已证明 Level 1 有效）
-2. 同压缩预算下重跑 search vs iterative 对照（或带修复后的 6×3 sweep）
-3. Qwen/SQuAD：**规划占位，不实现**
+1. [√] 叙事定稿：regime-dependent；「系统全面更优」仍 `[×]`
+2. [√] Step 2–3 预算对齐与一步关键复验；§2.16 诊断后一步策略收窄为 `target<=2`
+3. [√] Step 4：Phase J 规划 — [PHASE_J_QWEN_PLAN.md](PHASE_J_QWEN_PLAN.md)
+4. **之后**：Phase K 须先扩盘（约 30G+）；视觉域主实验链可停，不重跑全表；写论文见 [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md)
+
+Phase H / Phase I 证据：[EVIDENCE_PACK.md](EVIDENCE_PACK.md)。
 
 ---
 

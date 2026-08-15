@@ -17,9 +17,25 @@ def derive_uniform_layer_ratios(model_config: Mapping[str, Any], target_compress
     if target_compression_ratio <= 1.0:
         raise ValueError("target_compression_ratio must be greater than 1.0")
     baseline = build_model_from_config({"model": dict(model_config)})
-    baseline_count = parameter_count(baseline)
+    return _derive_uniform_ratios_on_model(baseline, model_type_from_config({"model": model_config}), target_compression_ratio)
+
+
+def derive_uniform_prune_ratio(
+    model,
+    model_type: str,
+    target_compression_ratio: float,
+) -> float:
+    """Return a single uniform prune ratio that approximates target compression on ``model``."""
+    ratios = _derive_uniform_ratios_on_model(model, model_type, target_compression_ratio)
+    return float(max(ratios.values())) if ratios else 0.0
+
+
+def _derive_uniform_ratios_on_model(model, model_type: str, target_compression_ratio: float) -> Dict[str, float]:
+    if target_compression_ratio <= 1.0:
+        raise ValueError("target_compression_ratio must be greater than 1.0")
+    baseline_count = parameter_count(model)
     target_count = baseline_count / float(target_compression_ratio)
-    backend = resolve_pruning_backend(baseline, model_type_from_config({"model": model_config}))
+    backend = resolve_pruning_backend(model, model_type)
     layer_names = backend.prunable_layer_names()
     if not layer_names:
         raise ValueError("model has no prunable layers")

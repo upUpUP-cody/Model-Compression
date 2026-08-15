@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from src.controller.heuristic_controller import CandidateProfile, HeuristicController
 from src.evaluation.cheap_critic import CheapCritic, CheapCriticResult
 from src.evaluation.frontier import ParetoFrontier, FrontierPoint
+from src.experiments.compression_targets import derive_uniform_prune_ratio
 from src.pruning.pruning_backend import CnnBackend, MlpBackend, PruningBackend, resolve_pruning_backend
 from src.pruning.sensitivity import SensitivityAnalyzer
 from src.pruning.structured_pruning import StructuredPruning
@@ -165,6 +166,8 @@ class AutonomousSearch:
         enable_two_layer_candidates: bool = False,
         recovery_top_k: int = 1,
         frontier_archive: Optional[ParetoFrontier] = None,
+        target_compression_ratio: float | None = None,
+        max_step_compression: float = 1.75,
     ) -> Tuple[nn.Module, SearchHistory]:
         if max_iterations < 1 or candidates_per_round < 1 or recovery_epochs < 0:
             raise ValueError("iteration, candidate, and recovery limits must be valid")
@@ -172,6 +175,10 @@ class AutonomousSearch:
             raise ValueError("recovery_top_k must be positive")
         if not candidate_ratios:
             raise ValueError("candidate_ratios must not be empty")
+        if target_compression_ratio is not None and float(target_compression_ratio) <= 1.0:
+            raise ValueError("target_compression_ratio must be greater than 1.0 when provided")
+        if float(max_step_compression) <= 1.0:
+            raise ValueError("max_step_compression must be greater than 1.0")
 
         resolved_device = resolve_device(device)
         current_model = copy.deepcopy(parent_model).to(resolved_device)
@@ -184,15 +191,41 @@ class AutonomousSearch:
         )
         ratio_multiplier = 1.0
         accepted_snapshot = copy.deepcopy(current_model)
+        target_ratio = float(target_compression_ratio) if target_compression_ratio is not None else None
+        step_cap = effective_max_step_compression(max_step_compression, target_ratio)
+        max_allowed_compression = target_ratio * 1.15 if target_ratio is not None else None
 
         for iteration in range(max_iterations):
             history.ratio_multiplier = ratio_multiplier
             backend = self._backend_for_model(current_model)
+            current_count = _parameter_count(current_model)
+            current_compression = history.initial_parameter_count / max(current_count, 1)
+            if target_ratio is not None and current_compression >= target_ratio:
+                history.add_event({
+                    "iteration": iteration,
+                    "action": "stop",
+                    "reason": "target_compression_reached",
+                    "compression_ratio": current_compression,
+                    "target_compression_ratio": target_ratio,
+                })
+                break
+
+            round_ratios = self._round_candidate_ratios(
+                current_model=current_model,
+                configured_ratios=candidate_ratios,
+                target_ratio=target_ratio,
+                current_compression=current_compression,
+                max_step_compression=step_cap,
+            )
+            if not round_ratios:
+                history.add_event({"iteration": iteration, "action": "stop", "reason": "no_round_ratios"})
+                break
+
             importance = self._call_importance_fn(current_model, train_loader, device, backend)
             candidates = self._generate_candidates(
                 current_model,
                 importance,
-                candidate_ratios,
+                round_ratios,
                 ratio_multiplier,
                 attempted=history.attempted_fingerprints,
                 limit=None,
@@ -229,10 +262,21 @@ class AutonomousSearch:
                     record["actual_parameter_count"] = actual_count
                     record["parent_parameter_count"] = parent_parameter_count
                     record["parameter_reduction"] = parent_parameter_count - actual_count
+                    candidate_compression = history.initial_parameter_count / max(actual_count, 1)
+                    record["candidate_compression_ratio"] = candidate_compression
                     if spec.fingerprint in history.attempted_fingerprints:
                         record.update(audit_status="filtered", final_reason="duplicate_attempted_fingerprint")
                     elif actual_count >= parent_parameter_count:
                         record.update(audit_status="filtered", final_reason="no_parameter_reduction")
+                    elif (
+                        max_allowed_compression is not None
+                        and candidate_compression > max_allowed_compression
+                    ):
+                        record.update(
+                            audit_status="filtered",
+                            final_reason="target_compression_overshoot",
+                            max_allowed_compression=max_allowed_compression,
+                        )
                     elif cheap_evaluations >= candidates_per_round:
                         record.update(audit_status="filtered", final_reason="cheap_critic_budget_exhausted")
                     else:
@@ -317,6 +361,9 @@ class AutonomousSearch:
             )
             decision = self.controller.decide_action(profile, history=history)
             best_record["decision"] = decision.to_dict()
+            compression_ratio = (
+                history.initial_parameter_count / recovered_count if recovered_count else 1.0
+            )
             event = {
                 "iteration": iteration,
                 "candidates": audited,
@@ -325,15 +372,28 @@ class AutonomousSearch:
                 "importance_method": best_spec.importance_method,
                 "actual_parameter_count": recovered_count,
                 "parent_parameter_count": best_spec.parent_parameter_count,
-                "compression_ratio": (
-                    history.initial_parameter_count / recovered_count if recovered_count else 1.0
-                ),
+                "compression_ratio": compression_ratio,
                 "cheap_critic": critic_result.to_dict(),
                 "recovery": best_record.get("recovery"),
                 "validation": validation,
                 "decision": decision.to_dict(),
             }
 
+            if (
+                decision.action == "accept"
+                and max_allowed_compression is not None
+                and compression_ratio > max_allowed_compression
+            ):
+                # Belt-and-suspenders: never accept an overshooting recovered model.
+                history.consecutive_failures += 1
+                best_record["final_action"] = "reject"
+                event.update(
+                    final_action="reject",
+                    final_reason="target_compression_overshoot",
+                    max_allowed_compression=max_allowed_compression,
+                )
+                history.add_event(event)
+                continue
             if decision.action == "accept":
                 current_model = recovered_model
                 accepted_snapshot = copy.deepcopy(current_model)
@@ -342,6 +402,17 @@ class AutonomousSearch:
                 history.consecutive_failures = 0
                 best_record["final_action"] = "accept"
                 event.update(final_action="accept", final_reason="constraints_satisfied")
+                history.add_event(event)
+                if target_ratio is not None and compression_ratio >= target_ratio:
+                    history.add_event({
+                        "iteration": iteration,
+                        "action": "stop",
+                        "reason": "target_compression_reached",
+                        "compression_ratio": compression_ratio,
+                        "target_compression_ratio": target_ratio,
+                    })
+                    break
+                continue
             elif decision.action == "regrow":
                 before = ratio_multiplier
                 ratio_multiplier *= decision.next_ratio_multiplier
@@ -375,6 +446,45 @@ class AutonomousSearch:
             history.add_event(event)
 
         return current_model, history
+
+    def _round_candidate_ratios(
+        self,
+        *,
+        current_model: nn.Module,
+        configured_ratios: Sequence[float],
+        target_ratio: float | None,
+        current_compression: float,
+        max_step_compression: float,
+    ) -> List[float]:
+        """Choose prune ratios for this round; cap step size when chasing a target."""
+        if target_ratio is None:
+            return [float(ratio) for ratio in configured_ratios if 0.0 < float(ratio) < 1.0]
+
+        remaining = float(target_ratio) / max(float(current_compression), 1e-9)
+        if remaining <= 1.0 + 1e-6:
+            return []
+        step = min(float(max_step_compression), remaining)
+        mild = min(step, 1.0 + 0.5 * (step - 1.0))
+        model_type = self.model_type or "mlp"
+        ratios: List[float] = []
+        for step_compression in (mild, step):
+            if step_compression <= 1.0 + 1e-6:
+                continue
+            try:
+                prune_ratio = derive_uniform_prune_ratio(current_model, model_type, step_compression)
+            except ValueError:
+                continue
+            # Allow tiny ratios near the target; discrete channel counts often need them.
+            if 0.0 < prune_ratio < 1.0:
+                ratios.append(float(prune_ratio))
+        # Deduplicate while preserving order (mild then aggressive).
+        ordered: List[float] = []
+        for ratio in ratios:
+            if all(abs(ratio - existing) > 1e-4 for existing in ordered):
+                ordered.append(ratio)
+        # Never fall back to full-target configured_ratios while chasing a target:
+        # that overshoots on an already-compressed model (sweep_v3 4x seed43).
+        return ordered
 
     def _backend_for_model(self, model: nn.Module) -> PruningBackend:
         if self.pruning_backend is not None:
@@ -539,6 +649,21 @@ def _loader_sample_count(dataloader: DataLoader) -> int:
         return len(dataloader.dataset)
     except TypeError as error:
         raise ValueError("full evaluation requires a dataloader with a finite dataset") from error
+
+
+def effective_max_step_compression(
+    configured_max_step: float,
+    target_compression_ratio: float | None,
+) -> float:
+    """Raise step cap to the target only in the very-low-compression regime.
+
+    Empirically, allowing a one-shot jump helps at 2x but hurts at 4x because the
+    final layer widths match iterative while intermediate recovery is skipped.
+    """
+    step_cap = float(configured_max_step)
+    if target_compression_ratio is not None and float(target_compression_ratio) <= 2.0:
+        step_cap = max(step_cap, float(target_compression_ratio))
+    return step_cap
 
 
 def _json_safe(value: Any) -> Any:
