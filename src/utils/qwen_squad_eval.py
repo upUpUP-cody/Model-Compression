@@ -24,9 +24,43 @@ PROMPT_TEMPLATE = (
     "Answer:"
 )
 
+# User-message body for Instruct chat template (generation prompt appended separately).
+SQUAD_USER_TEMPLATE = (
+    "Answer the question using only the context. "
+    "If the answer is not in the context, reply with \"unanswerable\".\n\n"
+    "Context: {context}\n\n"
+    "Question: {question}"
+)
+
+
+def build_squad_user_message(context: str, question: str) -> str:
+    return SQUAD_USER_TEMPLATE.format(context=str(context), question=str(question))
+
+
+def apply_qwen_chat_prompt(
+    tokenizer,
+    user_text: str,
+    *,
+    add_generation_prompt: bool = True,
+) -> str:
+    messages = [{"role": "user", "content": str(user_text)}]
+    if hasattr(tokenizer, "apply_chat_template"):
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=bool(add_generation_prompt),
+        )
+    suffix = "\nAssistant:" if add_generation_prompt else ""
+    return f"User: {user_text}{suffix}"
+
 
 class SquadPromptDataset(Dataset):
-    def __init__(self, examples: Any, max_samples: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        examples: Any,
+        tokenizer=None,
+        max_samples: Optional[int] = None,
+    ) -> None:
         self.examples = examples
         self.ids: List[str] = []
         self.prompts: List[str] = []
@@ -37,11 +71,14 @@ class SquadPromptDataset(Dataset):
             example_id = str(row["id"])
             answers = row.get("answers", {}) or {}
             texts = list(answers.get("text") or [])
-            # SQuAD 2.0 unanswerable: empty answer list.
+            user_text = build_squad_user_message(row["context"], row["question"])
+            if tokenizer is not None:
+                prompt = apply_qwen_chat_prompt(tokenizer, user_text, add_generation_prompt=True)
+            else:
+                # Back-compat for unit tests without a tokenizer.
+                prompt = PROMPT_TEMPLATE.format(context=row["context"], question=row["question"])
             self.ids.append(example_id)
-            self.prompts.append(
-                PROMPT_TEMPLATE.format(context=row["context"], question=row["question"])
-            )
+            self.prompts.append(prompt)
             self.answers.append([str(text) for text in texts])
 
     def __len__(self) -> int:
@@ -72,7 +109,8 @@ def load_qwen_for_eval(model_path: str, device: str, torch_dtype: str = "float16
         model_path,
         dtype=dtype,
         trust_remote_code=True,
-        attn_implementation="eager",
+        # Prefer SDPA/default: attn_implementation="eager" yields garbage generations on this stack.
+        attn_implementation="sdpa",
     )
     model.to(device)
     model.eval()
@@ -125,7 +163,7 @@ def evaluate_squad_split(
     split_name: str = "validation",
 ) -> Dict[str, float]:
     assert_test_not_in_selection_path([split_name])
-    dataset = SquadPromptDataset(examples, max_samples=max_samples)
+    dataset = SquadPromptDataset(examples, tokenizer=tokenizer, max_samples=max_samples)
     loader = DataLoader(dataset, batch_size=int(batch_size), shuffle=False, collate_fn=_collate)
     predictions: Dict[str, str] = {}
     references: Dict[str, List[str]] = {}

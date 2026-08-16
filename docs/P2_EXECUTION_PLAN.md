@@ -117,15 +117,19 @@ manifest 的 `runtime.inference_benchmark` 包含 `peak_allocated_bytes`、延�
 
 **输出：** `results/cifar_recovery_ablation/`、`ABLATION_REPORT.md`
 
-## P2.9 Qwen/SQuAD（仅规划，不实现）
+## P2.9 Qwen / GLUE → SQuAD（规划入口；执行见 Phase K）
 
-详细规划见 [`docs/PHASE_J_QWEN_PLAN.md`](PHASE_J_QWEN_PLAN.md)。
+详细规划见 [`PHASE_J_QWEN_PLAN.md`](PHASE_J_QWEN_PLAN.md) · 执行清单见 [`PHASE_K_QWEN_PLAN.md`](PHASE_K_QWEN_PLAN.md)。
 
-- Transformer 剪枝单元（head/FFN）
-- 指标：F1/EM
-- 硬件：>=16GB VRAM；Phase K 前磁盘建议 **30G+** 空闲
-- **启动条件：** CIFAR P1.2 + recovery 消融通过审查；**先扩盘再下载**
-- 本阶段只维护规划文档，不拉权重、不写实现
+**执行顺序（2026-08-16 锁定）**：
+
+1. K0–K5：SQuAD 管线冒烟（已完成）
+2. **KG：先 GLUE（SST-2 → RTE/QNLI）看压缩效果**（当前优先）
+3. K6：SQuAD 小矩阵（依赖 KG 门禁）
+4. K6-lit：外部压缩 baseline 调研
+
+- 模型：Qwen2.5-1.5B-Instruct；硬件建议 >=16GB VRAM
+- 本 P2 节为规划入口；**实现与验收以 PHASE_K 为准**
 
 ## 门禁
 

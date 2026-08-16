@@ -1,9 +1,11 @@
-# Phase K — Qwen / SQuAD 实现计划
+# Phase K — Qwen / GLUE → SQuAD 实现计划
 
-> 状态：**K0–K4 冒烟 `[√]`（2026-08-15）** · 下一档 = iterative / search 小矩阵 `[ ]`
+> 状态：**K0–K5 `[√]`** · **KG.5 `[√]`** · **K6 小扫 + 加深恢复 1.5x `[√]`** · **K6-lit 短表 `[√]`** · 下一档 = **论文 Limitations 收口**（SQuAD F1 未恢复）
+> 导师调整（2026-08-16）：**在继续 SQuAD 正式/小矩阵前，先做 GLUE 看压缩效果**
+> 任务锁定（2026-08-16）：**GLUE 正式标准 = SST-2 + RTE + QNLI**；KG.5 必做门禁；SQuAD = 生成式主考卷（见 §1.1）
 > 图例：`[√]` 已完成 · `[ ]` 未做 · `[×]` 证据不支持 / 不做
 > 规划前身：[PHASE_J_QWEN_PLAN.md](PHASE_J_QWEN_PLAN.md) · 视觉结论：[EVIDENCE_PACK.md](EVIDENCE_PACK.md) / [WORK_LOG.md](WORK_LOG.md)
-> 总路线：[PROJECT_PLAN.md](../PROJECT_PLAN.md) · 主机：RTX 4090 · 大文件根：`/mnt/data`（软链 `llm_data/`）
+> 总路线：[PROJECT_PLAN.md](../PROJECT_PLAN.md) · 主机：RTX 4090 · 权重/数据：`/mnt/data` · 运行产物：`/mnt/data2`
 
 ---
 
@@ -17,13 +19,44 @@
 
 核心问题（与视觉域同一句式）：在 LLM 上，search vs iterative 是否仍呈 **regime-dependent**，还是塌成别的形态。
 
+**任务顺序（锁定）**：
+
+1. **KG — GLUE**：短文本闭集 NLU（正式子集 **SST-2 + RTE + QNLI**），先看剪枝+恢复是否出信号（当前优先）
+2. **K6 — SQuAD**：长文阅读理解小矩阵（**KG.5 门禁通过后再开**）
+3. **K6-lit**：外部压缩 baseline 调研（可与 KG 并行文档工作）
+
 | 做 | 不做（本阶段默认） |
 |----|-------------------|
-| 1.5B 级 Qwen + SQuAD 2.0 协议与评估 | 7B / 14B |
+| 1.5B 级 Qwen + **先 GLUE、后 SQuAD** | 7B / 14B；跳过 GLUE 直接开 SQuAD 小矩阵 |
 | head / FFN 物理剪枝 + 参数量审计 | 把权重或 HF 缓存提交进 Git |
-| dense / oneshot 冒烟 → 小压缩矩阵 | 重跑 CIFAR formal100 |
+| dense / oneshot 冒烟 → **三任务正式小扫（KG.5）** | 重跑 CIFAR formal100；全 GLUE 九任务大表 |
 | 复用搜索协议（门禁 / frontier / history） | 预设「search 全面更优」 |
 | manifest / fingerprint / frozen test 报告 | 放宽视觉域 2pt 门禁叙事到 LLM（须单独消融） |
+
+### 1.1 任务区分：GLUE vs SQuAD（锁定）
+
+**一句话**：GLUE 测短文本闭集判断；SQuAD 测长文开放抽答——二者不可互相替代。
+
+| 标准 | 任务 | 考察面 | 输出 / 指标 | 在课题中的角色 |
+|------|------|--------|-------------|----------------|
+| GLUE | **SST-2** | 单句情感 | verbalizer → Accuracy | 冒烟（KG.4）+ 正式三任务之一 |
+| GLUE | **RTE** | 短文蕴含（二分类） | verbalizer → Accuracy | 正式 GLUE 标准 |
+| GLUE | **QNLI** | 问句–句对是否可答 | verbalizer → Accuracy | 正式 GLUE 标准 |
+| SQuAD | **SQuAD 2.0** | 长上下文阅读理解 / span + abstain | 生成 → F1 / EM | LLM **生成式主标准**（K6） |
+
+**协议（写死）**：
+
+- GLUE 一律 `prompt + verbalizer`（**不用**分类头）；数据划分与视觉同构（官方 validation = frozen test）
+- Verbalizer 标签（固定，禁止中途混比）：
+  - SST-2：`positive` / `negative`
+  - RTE：`entailment` / `not_entailment`
+  - QNLI：`yes` / `no`（句对是否包含答案）
+
+**论文写法约束**：
+
+- SST-2 冒烟 accuracy **不得**写成 LLM 主结论（须标冒烟）
+- 三任务对照表可作 LLM **过渡 / 短 NLU** 证据
+- 生成式主证据仍写 **SQuAD**（F1 / EM）
 
 ---
 
@@ -33,22 +66,27 @@
 |----|--------|
 | 模型 | `Qwen/Qwen2.5-1.5B-Instruct` |
 | 本地权重 | `/mnt/data/models/Qwen2.5-1.5B-Instruct` |
-| 任务 / 数据 | SQuAD 2.0（`rajpurkar/squad_v2`） |
-| 数据缓存 | `/mnt/data/datasets/squad` |
-| 主指标 | **F1 / EM**（百分制） |
-| 剪枝单元 | attention **KV-group**（整组 query heads + 对应 KV）；FFN **intermediate** |
+| **当前优先任务** | **GLUE**（见 §KG） |
+| GLUE 数据缓存 | `/mnt/data/datasets/glue` |
+| GLUE 冒烟子集 | **SST-2**（管线打通；指标非正式） |
+| **GLUE 正式标准** | **SST-2 + RTE + QNLI**（三任务；不做全 GLUE 九任务） |
+| GLUE 主指标 | **Accuracy**（百分制；任务特殊指标若有则附记） |
+| **SQuAD（生成式主标准）** | SQuAD 2.0（`rajpurkar/squad_v2`）；主指标 **F1 / EM** |
+| SQuAD 数据缓存 | `/mnt/data/datasets/squad`（K1 已下载） |
+| 剪枝单元 | attention **KV-group**；FFN **intermediate** |
 | 设备 | CUDA（4090 24GB）；环境入口 `source scripts/env_llm.sh` |
-| 结果根 | `/mnt/data/results/qwen_*` |
+| 结果根 | GLUE → `/mnt/data2/results/qwen_glue_*`；SQuAD → `/mnt/data2/results/qwen_*` / 既有 `qwen_squad_*` |
+| **开 K6 门禁** | **KG.5 `[√]`**（2026-08-16；`/mnt/data2/results/qwen_glue_kg5/`） |
 
 ### 数据协议（与视觉同构）
 
 ```text
 官方 train  --(split_seed, validation_fraction)-->  train' + validation'
-官方 validation  -------------------------------->  frozen test（选模/搜索禁止使用）
+官方 validation / 官方 test 约定 -------------------->  frozen test（选模/搜索禁止使用）
 ```
 
-实现：[`src/utils/squad_protocol.py`](../src/utils/squad_protocol.py)
-断言：`assert_test_not_in_selection_path`；单元测试见 `tests/test_squad_protocol.py`。
+- SQuAD：[`src/utils/squad_protocol.py`](../src/utils/squad_protocol.py)（已有）
+- GLUE：[`src/utils/glue_protocol.py`](../src/utils/glue_protocol.py)；断言 test 不进 selection path
 
 ### 存储约定
 
@@ -63,7 +101,7 @@ source scripts/env_llm.sh
 - `results` → `/mnt/data/results/vision`
 - `checkpoints` → `/mnt/data/checkpoints/vision`
 
-**磁盘建议**：冒烟后 `/mnt/data` 约剩 19G；做 1.5x–4x 多 seed 小矩阵前，建议块存储扩到合计 **约 100G**（再加约 70G）。
+**磁盘建议**：K5 起结果写 `/mnt/data2`（约 69G）；权重/SQuAD/HF 仍在 `/mnt/data`。GLUE 缓存另占 `/mnt/data/datasets/glue`。
 
 ---
 
@@ -77,9 +115,12 @@ flowchart LR
   k3[K3_Prune_Backend]
   k4[K4_Dense_Oneshot]
   k5[K5_Iter_Search]
-  k6[K6_Matrix_Report]
-  k0 --> k1 --> k2 --> k3 --> k4 --> k5 --> k6
+  kg[KG_GLUE]
+  k6[K6_SQuAD_Matrix]
+  k0 --> k1 --> k2 --> k3 --> k4 --> k5 --> kg --> k6
 ```
+
+> K0–K5 已在 **SQuAD** 上完成管线冒烟；按导师要求，**正式小矩阵前插入 KG（GLUE）**，再回到 K6（SQuAD）。
 
 ### K0 — 环境 `[√]`
 
@@ -88,15 +129,16 @@ flowchart LR
 - [√] 依赖：`transformers` / `datasets` / `accelerate` / `evaluate`
 - [√] 系统盘清理：迁 `results`/`checkpoints`；移除未用 miniconda；`venv` 改指系统 Python 3.10
 
-### K1 — 下载 `[√]`
+### K1 — 下载 `[√]`（SQuAD）；GLUE 三任务待齐
 
 - [√] Qwen2.5-1.5B-Instruct → `/mnt/data/models/...`（约 2.9G）
 - [√] SQuAD → `/mnt/data/datasets/squad`（train 130319 / official val 11873）
+- [√] GLUE → `/mnt/data/datasets/glue`（**正式标准三任务：SST-2 + RTE + QNLI**）
 - [√] 系统盘不承载大权重（验收：`df -h /` 不明显上涨）
 
-下载脚本：[`scripts/download_qwen_squad.sh`](../scripts/download_qwen_squad.sh)
+下载脚本：[`scripts/download_qwen_squad.sh`](../scripts/download_qwen_squad.sh)；GLUE：[`scripts/download_qwen_glue.sh`](../scripts/download_qwen_glue.sh)（KG.5 前须覆盖三任务）。
 
-### K2 — 协议 + 评估骨架 `[√]`
+### K2 — 协议 + 评估骨架 `[√]`（SQuAD）
 
 - [√] train/val/test 划分与元数据
 - [√] 配置 [`configs/qwen_squad_smoke.yaml`](../configs/qwen_squad_smoke.yaml)
@@ -111,7 +153,7 @@ flowchart LR
 
 要点：GQA 下 head 剪枝按 **整 KV-group** 保留，保证 `num_key_value_groups` 一致。
 
-### K4 — dense + oneshot 冒烟 `[√]`
+### K4 — dense + oneshot 冒烟 `[√]`（SQuAD）
 
 | 模式 | 说明 | 冒烟数字（64 条 carved val，零样本生成，**非正式主表**） |
 |------|------|----------------------------------------------------------|
@@ -119,42 +161,113 @@ flowchart LR
 | oneshot | 全层 MLP intermediate 剪 25%；无恢复 | F1/EM ≈ 18.75；参数 1.54B → 1.25B（约 **1.23x**） |
 
 产物：`/mnt/data/results/qwen_squad_smoke/`
-（`dense_metrics.json` / `oneshot_metrics.json` / `smoke_summary.json`）
+**解读约束**：仅证明管线可跑；**不得**写入论文主结论。
 
-**解读约束**：该 F1 仅证明管线可跑；提示词 / chat template / 恢复训练未优化，**不得**写入论文主结论。
+### K5 — iterative + autonomous_search 接线 `[√]`（SQuAD）
+
+| 子项 | 状态 | 内容 | 验收 |
+|------|------|------|------|
+| K5.1–K5.5 | `[√]` | 四方法冒烟接线 | `/mnt/data2/results/qwen_k5_smoke/` |
+
+| 方法 | 压缩比 | F1/EM（16 条 carved val，非正式） |
+|------|--------|----------------------------------|
+| dense | 1.00x | 6.25 / 6.25 |
+| oneshot | 1.23x | 6.25 / 6.25 |
+| iterative_level1 | 1.44x | 6.25 / 6.25 |
+| autonomous_search | 1.01x（单层候选） | 6.25 / 6.25 |
+
+说明：生成式 F1 仅证明管线；正式对照改走 **KG（GLUE）** 再回 SQuAD。
+
+复跑（历史冒烟，非当前优先）：
+
+```bash
+source scripts/env_llm.sh
+python experiments/run_qwen_k5_smoke.py --config configs/qwen_k5_smoke.yaml
+```
+
+### KG — GLUE 先看效果 `[√]` 冒烟已跑通；**KG.5 必做**（指标非正式）
+
+> 导师：在 SQuAD 前先做 GLUE。目的：用更短、更稳的分类式 NLU 信号，验证剪枝 + 恢复 + 四方法对照是否「有效果」，再投入 SQuAD 生成式评测成本。
+> 任务角色见 **§1.1**。**评测策略（写死）**：`prompt + verbalizer`（标签见 §1.1）；**不用**分类头。
+
+| 子项 | 状态 | 内容 | 验收 |
+|------|------|------|------|
+| KG.0 | `[√]` | 下载脚本 `scripts/download_qwen_glue.sh`；缓存 `/mnt/data/datasets/glue` | 见 env `LLM_GLUE_DIR` |
+| KG.1 | `[√]` | `glue_protocol` + prompt 评估骨架 + 单测 | test 不进 selection |
+| KG.2 | `[√]` | `configs/qwen_glue_smoke.yaml`、`experiments/run_qwen_glue_smoke.py` | dense/oneshot 可跑 |
+| KG.3 | `[√]` | Level-1 短恢复接到 GLUE LM pack | 只看 carved val |
+| KG.4 | `[√]` | 四方法冒烟（**仅 SST-2**）+ chat/SDPA 重跑 | dense acc≈84.4（32 条 carved val）；`/mnt/data2/results/qwen_glue_smoke/` |
+| KG.5 | `[√]` | **必做**：SST-2+RTE+QNLI × 1.5x/2x 四方法小扫 | 可读压缩信号已有；产物 `/mnt/data2/results/qwen_glue_kg5/`（~82 min；32 条 carved val；非正式主表） |
+
+复跑（KG.5）：
+
+```bash
+source scripts/env_llm.sh
+bash scripts/download_qwen_glue.sh
+python experiments/run_qwen_glue_kg5.py --config configs/qwen_glue_kg5.yaml
+```
+
+复跑（SST-2 冒烟）：
+
+```bash
+source scripts/env_llm.sh
+bash scripts/download_qwen_glue.sh
+python experiments/run_qwen_glue_smoke.py --config configs/qwen_glue_smoke.yaml
+```
+
+**门禁**：**KG.5 `[√]`**（三任务可读压缩信号）已通过 → 可开 **K6 SQuAD 小矩阵**。KG.4 仅证明管线；K6-lit 调研文档可与 K6 并行。
+**明确不做（KG）**：全 GLUE 九任务大表；把 **SST-2 冒烟 / KG.5 小扫** accuracy 写成论文 LLM 主结论（须标非正式）。三任务表可作过渡证据，生成式主结论仍属 SQuAD。
+
+**结果解读（2026-08-16）**（详情：[WORK_LOG.md](WORK_LOG.md) §4 第 11 条 / [WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md)）：
+
+1. 门禁通过：评测可用；剪枝有代价；恢复有效。
+2. Oneshot 无恢复几乎全崩 → 负结果，Level-1 恢复必要。
+3. 1.5x 档 iterative 更稳；2.0x 档掉点加大。
+4. search vs iterative 已 crossover（禁止「全面更优」）；与 CIFAR regime-dependent 兼容，LLM 侧仅过渡证据。
+5. 读表修正：iterative 实测超标（~1.88 / ~2.81）；CE ≠ 任务 acc；n=32。K6 须同预算对齐。
+
+### K6 — SQuAD 小矩阵与报告 `[√]` 小扫已跑（非正式；frozen test 未开）
+
+| 子项 | 状态 | 默认 |
+|------|------|------|
+| 前置 | `[√]` | **KG.5 通过**（三任务可读信号，2026-08-16） |
+| 压缩目标 | `[√]` | **1.5x / 2x / 4x**（MLP-only 名义 4x 实测上限约 3.1–3.6x） |
+| seed | `[√]` | 1 seed（小扫） |
+| 恢复预算 | `[√]` | 相对 dense 累计压缩已修（`baseline_parameter_count`）；1.5x/2.0x 对齐；禁止 KG.5 叠乘 |
+| 冻结 test | `[ ]` | 官方 validation **只评一次**（尚未开） |
+| 产物 | `[√]` | `/mnt/data2/results/qwen_k6/` + `k6_summary.json` + WORK_LOG |
+| 叙事 | `[√]` | 小扫允许失败；**禁止**「search 全面更优」；F1 主表须标 n=16 carved val |
+
+**结果解读（2026-08-16）**：
+
+1. **预算对齐成功**：1.5x/2.0x 实测 ≈ 目标；不再出现 KG.5 式 ~2.8x 超剪。
+2. **dense 可读**：chat+SDPA 下 F1≈30.6（16 条）；CE finite。
+3. **短恢复不足**：1.5x/2x 上 oneshot/iterative/search 的 F1≈0（CE 仍有限）→ 剪枝伤生成式 QA，Level-1×1 epoch 拉不回。
+4. **4x 名义不可达（MLP-only）**：oneshot/search≈3.07x，iterative≈3.62x；须记上限或扩剪枝单元。
+5. **不说明**：非正式主表；不能证 search 优于 iterative；不能替代更大样本 / frozen test。
 
 复跑：
 
 ```bash
 source scripts/env_llm.sh
-export TRITON_CACHE_DIR=/mnt/data/hf/triton
-python experiments/run_qwen_squad_eval.py --config configs/qwen_squad_smoke.yaml --mode both
+python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml
+# 仅评测冒烟：
+python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml --eval-only-dense
 ```
 
-### K5 — iterative + autonomous_search 接线 `[ ]`
+### K6-lit — 外部压缩 baseline（自动搜索 vs 人工设计）`[~]` 文献短表已写
 
-目标：把视觉域 controller / recovery / 压缩目标止损接到 Qwen backend。
+> 导师要求：调研他人模型压缩工作作 baseline，看自动搜索是否优于人工设计。
+> 论文位置：[PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md) §8；短表：[K6_LIT_BASELINE_SHORTLIST.md](K6_LIT_BASELINE_SHORTLIST.md)。
 
-| 子项 | 状态 | 内容 | 验收 |
-|------|------|------|------|
-| K5.1 | `[ ]` | 候选空间：按层 head-group 比 + FFN intermediate 比 | 与 `prunable_layer_names()` 对齐 |
-| K5.2 | `[ ]` | 重要性：幅值或 Wanda 风格激活（先幅值冒烟，再 Wanda） | 可复现 seed |
-| K5.3 | `[ ]` | 恢复：短 epoch 指令微调或 SQuAD 监督（先定 **Level-1 全参短恢复**） | 只看 carved validation |
-| K5.4 | `[ ]` | 搜索门禁：能力门禁是否迁移 2pt；过冲硬顶；目标压缩止损 | 单独消融，不默认照搬视觉叙事 |
-| K5.5 | `[ ]` | 对照脚本：`run_qwen_p12_comparison`（或等价） | dense / oneshot / iterative / search 四方法可跑 |
-
-**明确不做（K5）**：正式全压缩率 × 多 seed 大表（留给 K6）。
-
-### K6 — 小矩阵与报告 `[ ]`
-
-| 子项 | 状态 | 默认 |
+| 子项 | 状态 | 内容 |
 |------|------|------|
-| 压缩目标 | `[ ]` | **1.5x / 2x / 4x**（先小矩阵；是否上 6x+ 视盘与时间） |
-| seed | `[ ]` | 先 1 seed 打通，再 3 seed |
-| 恢复预算 | `[ ]` | 四方法对齐（与 CIFAR budget-match 同思想） |
-| 冻结 test | `[ ]` | 方法选定后官方 validation **只评一次** |
-| 产物 | `[ ]` | `/mnt/data/results/qwen_p12_*` + AGGREGATE 报告 + WORK_LOG 回写 |
-| 叙事 | `[ ]` | 允许写 crossover / 接近 / 失败；**禁止**未证成的「系统全面更优」 |
+| 调研 | `[√]` | 短表已按质量门禁勾选 LTH / Wanda / SparseGPT / 结构化 LLM |
+| 选型 | `[√]` | 先 Related Work；复现挂 SQuAD/GLUE 同预算（待 F1 可读后） |
+| 对照问题 | `[ ]` | `autonomous_search` 是否优于人工设计 baseline（实验待加深恢复） |
+| 验收 | `[~]` | 短表已标注 venue/依据；复现实验未开 |
+
+**顺序**：调研可与 KG 并行；实验复现优先挂在 **GLUE**，再迁 SQuAD。
 
 ---
 
@@ -164,11 +277,11 @@ CIFAR 定稿：**regime-dependent**（≤4x iterative 略稳；≥8x search 更�
 
 LLM 上默认假设（待验，非结论）：
 
-1. 同压缩 + 同恢复预算下，是否仍出现 crossover
-2. 门禁（能力跌幅阈值）对 search 的贡献是否仍显著
+1. 同压缩 + 同恢复预算下，是否仍出现 crossover（**先在 GLUE 三任务上看趋势，再在 SQuAD 验证**）
+2. 门禁对 search 的贡献是否仍显著
 3. oneshot 在中高压缩是否同样崩溃或可恢复
 
-论文位置：视觉为主结果；LLM 为 **第二域迁移 / 讨论**，见 [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md)。
+论文位置：视觉为主结果；LLM 为 **第二域迁移 / 讨论**（GLUE 短 NLU 过渡 → SQuAD 长文抽答），见 [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md) 与本文 §1.1。
 
 ---
 
@@ -176,34 +289,38 @@ LLM 上默认假设（待验，非结论）：
 
 | 角色 | 路径 |
 |------|------|
-| 环境 | `scripts/env_llm.sh` |
-| 下载 | `scripts/download_qwen_squad.sh` |
-| 冒烟配置 | `configs/qwen_squad_smoke.yaml` |
-| 评估入口 | `experiments/run_qwen_squad_eval.py` |
-| SQuAD 协议 | `src/utils/squad_protocol.py` |
-| 生成式 QA 评估 | `src/utils/qwen_squad_eval.py` |
+| 环境 | `scripts/env_llm.sh`（结果 → `/mnt/data2`） |
+| SQuAD 下载 | `scripts/download_qwen_squad.sh` |
+| K4 SQuAD 冒烟 | `configs/qwen_squad_smoke.yaml` / `experiments/run_qwen_squad_eval.py` |
+| K5 SQuAD 四方法 | `configs/qwen_k5_smoke.yaml` / `experiments/run_qwen_k5_smoke.py` |
+| SQuAD 协议 / 评估 / LM pack | `src/utils/squad_protocol.py` / `qwen_squad_eval.py` / `qwen_train_data.py` |
+| LM Level-1 恢复 | `src/recovery/qwen_lm_recovery.py` |
 | 剪枝后端 | `src/pruning/transformer_structured_pruning.py` |
-| Backend 解析 | `src/pruning/pruning_backend.py` |
-| 冒烟结果 | `/mnt/data/results/qwen_squad_smoke/` |
+| **KG GLUE** | `configs/qwen_glue_smoke.yaml`、`experiments/run_qwen_glue_smoke.py`、`src/utils/glue_protocol.py`、`qwen_glue_eval.py`、`qwen_glue_train_data.py`、`src/experiments/qwen_glue_comparison.py` |
+| K4/K5 产物 | `/mnt/data/results/qwen_squad_smoke/`、`/mnt/data2/results/qwen_k5_smoke/` |
+| KG 产物 | `/mnt/data2/results/qwen_glue_smoke/` |
 
 ---
 
 ## 6. 验收清单
 
-### 已验收（K0–K4）`[√]`
+### 已验收（K0–K5，SQuAD 管线）`[√]`
 
-- [√] 大文件仅在 `/mnt/data`；仓库无权重提交
+- [√] 大文件仅在 `/mnt/data`（+ K5 产物 `/mnt/data2`）；仓库无权重提交
 - [√] SQuAD 划分可复现；test 不进 selection
-- [√] 物理剪枝后 forward + 参数量下降（单测 + oneshot 冒烟）
-- [√] dense / oneshot JSON 落盘；文档标明冒烟非主表
-- [√] 全量 `pytest`：138 passed, 1 skipped（冒烟前后基线）
+- [√] 物理剪枝 + oneshot/iterative/search 冒烟可跑
+- [√] 相关单测通过（含 `tests/test_qwen_k5_recovery.py`）
 
-### 待验收（K5–K6）`[ ]`
+### 待验收（KG → K6）`[ ]`
 
-- [ ] iterative 与 search 在同一压缩目标下可跑通
-- [ ] 至少一张 1.5x–4x 同预算对照表（含 compression 验收带）
-- [ ] frozen test 报告与 fingerprint / manifest
-- [ ] WORK_LOG / EVIDENCE_PACK 增补 LLM 节；**不**把冒烟 F1 当主结论
+- [√] **KG.0–KG.4**：GLUE SST-2 四方法冒烟管线 + 协议单测
+- [√] **评测稳定**：chat template + 去掉 eager attn；dense acc>0 且 CE finite（重跑 2026-08-16）
+- [√] **KG.5 必做**：SST-2+RTE+QNLI × 1.5x/2x；dense acc>0 / CE finite；oneshot 无恢复崩、iterative/search 部分恢复（`/mnt/data2/results/qwen_glue_kg5/`）；**过渡证据结论已记入 WORK_LOG**
+- [√] **开 K6 小扫**：SQuAD 1.5x–4x；预算对齐已修；产物 `qwen_k6`（F1 非正式；恢复不足）
+- [ ] frozen test 报告与 fingerprint / manifest（矩阵阶段）
+- [√] WORK_LOG 已记 KG.5 / K6 含义；冒烟指标不进主结论
+- [ ] K6-lit：外部压缩调研短表（过质量门禁；标注 venue/依据）
+- [ ] 加深恢复后再比 search vs iterative（当前 F1≈0 无法排序）
 
 ---
 
@@ -211,26 +328,35 @@ LLM 上默认假设（待验，非结论）：
 
 | 项 | 说明 | 处理 |
 |----|------|------|
-| 零样本 F1 偏低 | 冒烟未用 chat template / 未微调 | K5 恢复训练后再评；或先加 instruct 模板消融 |
-| Triton / Python.h | 删 miniconda 后曾缺头文件 | 已装 `python3.10-dev`；`TRITON_CACHE_DIR` 放到 `/mnt/data` |
-| GQA head 剪枝 | 仅整 KV-group | 文档与 API 保持该约束；重要性按 group 聚合 |
-| 盘余量 | `/mnt/data` ~19G 空闲 | K6 前扩到 ~100G 合计 |
-| 评估速度 | 全 val 生成式评测较慢 | 矩阵阶段可用子集选模 + 冻结后全量/官方 test |
+| Instruct 零样本乱码 | 曾因 `attn_implementation=eager` + 无 chat template | **已修**：SDPA + chat template；dense 冒烟 acc≈84% |
+| SQuAD 零样本 F1 偏低 | 生成式评测噪声大、成本高 | **先 GLUE 三任务看信号**；再回 SQuAD 优化模板/恢复 |
+| Instruct + GLUE | 分类任务需固定 prompt+verbalizer | §1.1 写死三任务标签；禁止中途混比 |
+| 显存 | 1.5B 全参恢复在 24GB 偏紧 | 延续 SGD / 小 batch / 短 seq；见既有 K5 经验 |
+| 盘余量 | `/mnt/data` 偏紧 | GLUE 缓存写 `/mnt/data/datasets/glue`；结果写 `/mnt/data2` |
+| 评估速度 | SQuAD 全量生成慢 | 正因如此 KG 优先 |
+| **GPU / 加卡** | 本机基线 **1×4090**；runner 单进程串行；K6 实测显存约 7–10GB/24GB | **本趟 K6 不需要加卡**。仅当单卡预估 ≥约 3h 且可按 target 拆时才请用户加第 2 卡。规则见 [CLAUDE.md](../CLAUDE.md)「LLM / GPU 与配置优化告知」 |
+
+**本趟 K6 资源判定（2026-08-16）**：仍单卡即可；不中断、不改正在跑的 yaml。若之后多 seed / 更大 eval / 更长恢复且单卡 ≥3h 并可拆 —— 再按 CLAUDE.md 标准 A 请加第二张卡。
 
 ---
 
 ## 8. 下一步（立即）`[ ]`
 
-1. [ ] **扩盘**（推荐）：`/mnt/data` → 合计约 100G
-2. [ ] **K5**：Level-1 短恢复 + iterative / search 接线到 `TransformerBackend`
-3. [ ] **K6**：1.5x / 2x / 4x ×（先 1 seed）同预算四方法表
-4. [ ] 回写 [WORK_LOG.md](WORK_LOG.md) / [WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md)；论文 LLM 段落保持「迁移待验」语气
+1. [√] **稳定 GLUE 评测**：chat template + SDPA + CE float32（SST-2 已重跑，dense acc≈84%）
+2. [√] **下载补齐 RTE / QNLI**（与 SST-2 同缓存协议）
+3. [√] **KG.5（必做）**：SST-2+RTE+QNLI × 1.5x/2x 四方法小扫；可读信号已有（`qwen_glue_kg5`）
+4. [√] **K6（SQuAD）小矩阵**：预算对齐 + chat；`/mnt/data2/results/qwen_k6/`（非正式；剪枝后 F1 塌）
+5. [√] **加深 SQuAD 恢复 1.5x**：4 epoch / 512 / 64；iterative/search F1 仍≈0 → **不扩 2x**（`qwen_k6_recover_1p5x`）
+6. [√] **K6-lit**：短表 [K6_LIT_BASELINE_SHORTLIST.md](K6_LIT_BASELINE_SHORTLIST.md)
+7. [ ] 论文 Limitations / EVIDENCE_PACK LLM 附录；frozen test 延后
 
 ---
 
 ## 9. 相关文档
 
-- [PHASE_J_QWEN_PLAN.md](PHASE_J_QWEN_PLAN.md) — 规划占位 `[√]`
+- [PHASE_J_QWEN_PLAN.md](PHASE_J_QWEN_PLAN.md) — 规划占位 `[√]`（执行顺序以本文为准：先 GLUE）
 - [EVIDENCE_PACK.md](EVIDENCE_PACK.md) — 视觉域证据包
 - [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md) — 论文提纲
 - [P2_EXECUTION_PLAN.md](P2_EXECUTION_PLAN.md) §P2.9
+- [WORK_LOG.md](WORK_LOG.md) / [WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md)
+- [CLAUDE.md](../CLAUDE.md) — 长实验规范；**LLM / GPU 与配置优化告知**

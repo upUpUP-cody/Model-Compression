@@ -84,7 +84,14 @@ def split_squad_train_validation_test(
 
 def assert_test_not_in_selection_path(used_split_names: Sequence[str]) -> None:
     """Raise if a caller tries to put frozen test on the selection path."""
-    forbidden = {"test", "official_validation", "squad_v2.official_validation"}
+    forbidden = {
+        "test",
+        "official_validation",
+        "squad_v2.official_validation",
+        "glue.sst2.official_validation",
+        "glue.rte.official_validation",
+        "glue.qnli.official_validation",
+    }
     overlap = forbidden.intersection({str(name).lower() for name in used_split_names})
     if overlap:
         raise ValueError(

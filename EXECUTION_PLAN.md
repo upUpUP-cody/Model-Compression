@@ -130,7 +130,7 @@
 ### P2.6 LoRA 恢复 [进行中]
 ### P2.7 自蒸馏恢复 [进行中]
 ### P2.8 恢复消融 [进行中]
-### P2.9 Qwen/SQuAD [planned only]
+### P2.9 Qwen / GLUE → SQuAD [planned in P2; executed in Phase K]
 
 ## 执行顺序与全局验收
 
@@ -140,6 +140,6 @@
 4. 运行 CIFAR P1.2 smoke → formal → multiseed → sweep（P2.4）。
 5. 写入 manifest GPU benchmark 指标（P2.5）。
 6. CIFAR 协议稳定后，完成 LoRA/自蒸馏恢复与消融（P2.6–P2.8）。
-7. Qwen/SQuAD 仅作规划占位（P2.9）。
+7. Qwen：P2.9 规划占位；**执行以 Phase K 为准，顺序为先 GLUE 再 SQuAD**（见 `docs/PHASE_K_QWEN_PLAN.md`）。
 
 每个功能修改后运行对应 pytest 文件；阶段结束运行 `python -m pytest tests -q`。任何真实 MNIST 长实验开始前，先确认数据集、基线检查点、配置和输出目录，并按本文件的运行约束向用户报告预计时长和产物路径。

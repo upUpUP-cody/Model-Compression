@@ -249,6 +249,10 @@ class AutonomousSearch:
                     "audit_status": "generated",
                 }
                 try:
+                    if cheap_evaluations >= candidates_per_round:
+                        record.update(audit_status="filtered", final_reason="cheap_critic_budget_exhausted")
+                        audited.append(record)
+                        continue
                     candidate_model = backend.create_pruned_model_by_indices(
                         spec.keep_indices_dict()
                     ).to(resolved_device)
@@ -277,8 +281,6 @@ class AutonomousSearch:
                             final_reason="target_compression_overshoot",
                             max_allowed_compression=max_allowed_compression,
                         )
-                    elif cheap_evaluations >= candidates_per_round:
-                        record.update(audit_status="filtered", final_reason="cheap_critic_budget_exhausted")
                     else:
                         critic_result = self.critic.evaluate(
                             candidate_model, validation_loader, cheap_eval_samples, device

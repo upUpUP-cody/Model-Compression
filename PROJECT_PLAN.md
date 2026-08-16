@@ -2,14 +2,13 @@
 
 > 本文件是项目的完整长期路线图、阶段目标和全局成功标准。当前 P0/P1/P2 的执行顺序、研究协议和阶段验收条件见 [EXECUTION_PLAN.md](EXECUTION_PLAN.md)。详细实验结论见 [docs/WORK_LOG.md](docs/WORK_LOG.md) / [docs/WORK_LOG_BRIEF.md](docs/WORK_LOG_BRIEF.md)。
 >
-> **更新状态（2026-08-14）**
+> **更新状态（2026-08-16）**
 >
-> - **已完成**：MVP 核心流程；MNIST CPU 冒烟；MNIST P1.2 GPU（smoke/formal/multiseed/6×3 sweep）；**CIFAR-10 + ResNet-18 P1.2**（smoke/formal/multiseed/sweep_v2）；搜索门禁（recovery 后再 decide）+ **目标压缩止损**；恢复消融 Level 1/2/3（单 seed）。
-> - **现阶段不做**：Qwen/SQuAD **仅规划占位，不实现**；CIFAR 100 epoch 正式关键对照已完成（见 Phase I），全压缩率矩阵仍可按需扩展。
-> - **验证**：`python -m pytest tests -q` → **121 passed, 1 skipped**（2026-08-14）。
-> - **关键产物（不进 Git）**：`results/p12_comparison_gpu_sweep/`（MNIST）；`results/cifar_p12_comparison_gpu_sweep_v2/`；`results/cifar_recovery_ablation/`。
->
-> 主机参考：RTX 4090 Linux，torch 2.x + CUDA。
+> - **已完成**：MVP；MNIST / CIFAR P1.2；formal100 主表与 crossover 机制；Phase K0–K5 **SQuAD 管线冒烟**；KG.0–KG.4 **SST-2 冒烟**。
+> - **当前优先**：论文收口 — CIFAR 主叙事 + GLUE 过渡；SQuAD 记为 **恢复不足局限**（加深 1.5x 后 F1 仍塌）。见 [docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)。
+> - **不默认**：重跑 CIFAR formal100；跳过 GLUE 直接开 SQuAD 正式对照；宣称 search 系统全面更优。
+> - **主机**：1×RTX 4090（默认单卡；仅 Agent 判定需双卡拆任务时再加第 2 卡）；权重/数据 `/mnt/data`；LLM 运行产物 `/mnt/data2`。
+> - **资源告警**：加卡 / 配置优化触发标准见 [CLAUDE.md](CLAUDE.md)「LLM / GPU 与配置优化告知」。
 
 ## 项目概述
 
@@ -63,7 +62,7 @@
   2. **CIFAR-10**: 图像分类 [完成] **[已在 RTX 4090 跑通 P1.2]**
   3. **SQuAD 2.0**: 问答任务 (论文主要基准) [必须 GPU] **[P3 规划占位，现阶段不实现]**
   4. **MMLU**: 多任务语言理解 (可选) [必须 GPU] **[必须 GPU]**
-- **产出**: 
+- **产出**:
   - `data/mnist/` 或 `data/cifar10/`
   - `data/squad/` (train.json, dev.json) — 未准备
   - 数据加载器：`src/utils/data_loader.py`（含 CIFAR train/val split + `split_hash`）
@@ -97,11 +96,11 @@
       def prune_mlp_layer(self, layer, ratio):
           """剪枝 MLP 层的神经元"""
           pass
-      
+
       def prune_attention_head(self, attention, ratio):
           """剪枝 Transformer 注意力头"""
           pass
-      
+
       def apply_mask(self, model, pruning_mask):
           """应用剪枝掩码到模型"""
           pass
@@ -120,8 +119,8 @@
 - **函数签名**:
   ```python
   def compute_layer_sensitivity(
-      model, 
-      dataloader, 
+      model,
+      dataloader,
       method='wanda'
   ) -> dict:
       """
@@ -145,11 +144,11 @@
           self.capability_gap = None      # 性能差距
           self.compression_gap = None     # 压缩差距
           self.context_gap = None         # 上下文差距
-      
+
       def compute_capability_gap(self, child_acc, parent_acc):
           """计算子网络与父网络的性能差距"""
           return parent_acc - child_acc
-      
+
       def is_on_frontier(self, sparsity, accuracy):
           """判断是否在帕累托前沿上"""
           pass
@@ -290,53 +289,53 @@ def autonomous_lottery_ticket_discovery(
     """
     history = SearchHistory()
     current_model = parent_model
-    
+
     for iteration in range(max_iterations):
         # 1. Self-Diagnosis
         sensitivity = compute_layer_sensitivity(current_model, train_loader)
-        
+
         # 2. Profile Frontier
         profile = compute_frontier_profile(current_model, val_loader)
-        
+
         # 3. Propose Candidates
         candidates = generate_ticket_candidates(
-            current_model, 
-            sensitivity, 
+            current_model,
+            sensitivity,
             k=5
         )
-        
+
         # 4. Cheap Evaluation
         scored_candidates = [
             (cand, cheap_critic(cand)) for cand in candidates
         ]
         best_candidate = max(scored_candidates, key=lambda x: x[1])
-        
+
         # 5. Controller Decision
         action = controller.decide_action(profile, best_candidate, history)
-        
+
         if action == 'accept':
             # 6. Recovery
             current_model = apply_recovery(
-                best_candidate, 
-                train_loader, 
+                best_candidate,
+                train_loader,
                 level=2
             )
             history.add_success(current_model, profile)
-            
+
         elif action == 'rollback':
             current_model = history.get_last_accepted()
-            
+
         elif action == 'regrow':
             current_model = regrow_layers(current_model)
-            
+
         # 7. Full Evaluation
         accuracy = full_evaluate(current_model, val_loader)
         print(f"Iteration {iteration}: Accuracy={accuracy:.2f}%")
-        
+
         # 8. Check Stopping Condition
         if profile.capability_gap < 0.01 and get_sparsity(current_model) >= target_sparsity:
             break
-    
+
     return current_model, history
 ```
 
@@ -349,27 +348,27 @@ def autonomous_lottery_ticket_discovery(
 model:
   type: "mlp"  # mlp, resnet, bert
   hidden_dims: [512, 256, 128]
-  
+
 pruning:
   method: "wanda"  # wanda, magnitude, gradient
   target_sparsity: 0.9
   structured: true
-  
+
 recovery:
   level: 2  # 0-3
   lora_rank: 8
   distillation_temp: 2.0
-  
+
 controller:
   type: "heuristic"  # heuristic, adaptive, llm
   capability_threshold: 0.05
   max_failures: 3
-  
+
 training:
   batch_size: 64
   learning_rate: 0.001
   epochs: 20
-  
+
 search:
   max_iterations: 10
   candidates_per_round: 5
@@ -565,10 +564,10 @@ search:
 - [×] 证明 search **系统全面**优于 iterative — **当前证据不支持**（应为 regime-dependent）
 
 ### 目标标准 (论文 LLM 复现)
-- [ ] 在 SQuAD 上达到论文报告的 F1 分数 (±2%)
-- [ ] 稀疏度-准确率曲线与论文 Figure 2 一致
-- [ ] 优于 One-shot Wanda baseline 至少 10%
-- [ ] 优于传统 IMP 至少 5%
+- [√] 先在 **GLUE 正式标准（SST-2 + RTE + QNLI）** 上给出同预算压缩对照信号（Phase K §KG.5；短文本闭集 NLU）
+- [ ] 再在 **SQuAD** 上达到可报告的 F1/EM（长文抽答；± 约定容差；**KG.5 门禁已满足**）
+- [ ] 优于 One-shot Wanda baseline 至少 10%（同协议对齐后）
+- [ ] 优于传统 IMP / 人工设计 iterative 至少 5%（同压缩预算）
 
 ### 优秀标准 (超越论文)
 - [ ] 在论文未测试的数据集上验证
@@ -586,6 +585,7 @@ search:
    - The Lottery Ticket Hypothesis (Frankle & Carbin, 2019)
    - Wanda: Pruning by Weights and Activations (Sun et al., 2023)
    - SparseGPT (Frantar & Alistarh, 2023)
+   - **用途**：相关工作不仅列引用，还要服务 **人工设计 baseline vs autonomous_search** 对照（调研短表 + 能复现则同预算实验）；**调研优先顶会/高引用权威工作**，详见 [`docs/PAPER_RESULTS_OUTLINE.md`](docs/PAPER_RESULTS_OUTLINE.md) §8 质量门禁、[`docs/PHASE_K_QWEN_PLAN.md`](docs/PHASE_K_QWEN_PLAN.md) K6-lit
 
 ### 代码参考
 - PyTorch Pruning Tutorial: https://pytorch.org/tutorials/intermediate/pruning_tutorial.html
@@ -595,7 +595,8 @@ search:
 ### 数据集
 - MNIST: `torchvision.datasets.MNIST`
 - CIFAR-10: `torchvision.datasets.CIFAR10`
-- SQuAD 2.0: https://rajpurkar.github.io/SQuAD-explorer/
+- GLUE: https://gluebenchmark.com/（Phase K **正式标准**：SST-2 + RTE + QNLI；短文本闭集 NLU；冒烟仅用 SST-2）
+- SQuAD 2.0: https://rajpurkar.github.io/SQuAD-explorer/（长文阅读理解 / 抽答；**KG.5 门禁已通过，可开**小矩阵）
 
 ---
 
@@ -642,13 +643,14 @@ flowchart TD
 - **磁盘**：实现前须先提醒用户扩盘（Qwen 权重/缓存/多次 run 通常还需 **30G+** 空闲）
 - 本阶段只写接口草图与实验矩阵，**不实现** Transformer 剪枝 / SQuAD pipeline；**不下载**权重
 
-### Phase K — LLM 实现（冒烟已完成；小矩阵进行中）
+### Phase K — LLM 实现（KG.5/K6/加深恢复/lit 短表 `[√]`；下一档 = 论文 Limitations 收口）
 
-- 执行计划：[docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)
-- 模型锁定：`Qwen2.5-1.5B-Instruct`；数据：SQuAD 2.0；大文件：`/mnt/data`
-- [√] K0–K4：环境 / 下载 / 协议 / 物理剪枝 / dense+oneshot 冒烟
-- [ ] K5–K6：iterative + search 接线与 1.5x–4x 同预算小矩阵（详见 PHASE_K 文档）
-- 同压缩预算对照与审计产物要求与 P1/P2 一致；**不预设** search 全面更优
+- 执行计划：[docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)（**§1.1 任务区分**）
+- 模型锁定：`Qwen2.5-1.5B-Instruct`；大文件：`/mnt/data`（结果：`/mnt/data2`）
+- [√] K0–K5 管线；KG.5 GLUE 门禁；K6 预算对齐小扫
+- [√] **加深恢复 1.5x**：`/mnt/data2/results/qwen_k6_recover_1p5x/` — 剪枝 F1 仍≈0 → **不扩 2x**
+- [√] K6-lit 短表：[`docs/K6_LIT_BASELINE_SHORTLIST.md`](docs/K6_LIT_BASELINE_SHORTLIST.md)
+- [ ] 论文 Limitations / frozen test（延后）；**不预设** search 全面更优
 
 ---
 
@@ -658,7 +660,8 @@ flowchart TD
 2. [√] 预算对齐、一步复验与 4x 诊断（一步策略收窄为 `target<=2`）
 3. [√] Phase J 规划：[`docs/PHASE_J_QWEN_PLAN.md`](docs/PHASE_J_QWEN_PLAN.md)
 4. [√] 论文成果提纲：[`docs/PAPER_RESULTS_OUTLINE.md`](docs/PAPER_RESULTS_OUTLINE.md)
-5. [√] Phase K 冒烟：[`docs/PHASE_K_QWEN_PLAN.md`](docs/PHASE_K_QWEN_PLAN.md)（K0–K4）
-6. **之后**：按 Phase K 文档推进 K5–K6；按成果提纲扩写论文章节；不默认重跑 formal100
+5. [√] Phase K SQuAD 管线冒烟：[`docs/PHASE_K_QWEN_PLAN.md`](docs/PHASE_K_QWEN_PLAN.md)（K0–K5）
+6. [√] KG.0–KG.5 GLUE；K6 SQuAD 小扫（预算对齐；`/mnt/data2/results/qwen_k6/`）
+7. **之后**：加深 SQuAD 恢复 → 再比方法 / frozen test；并行 K6-lit；不默认重跑 formal100
 
 执行顺序与验收细节仍以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 为准；实验结论以 WORK_LOG 为准；写论文以 PAPER_RESULTS_OUTLINE 为准；LLM 以 PHASE_K_QWEN_PLAN 为准。

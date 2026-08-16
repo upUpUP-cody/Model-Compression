@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Phase K LLM environment: all large HF/model/dataset artifacts on /mnt/data.
+# Phase K LLM environment: weights/data on /mnt/data; K5+ run artifacts on /mnt/data2.
 # Usage: source scripts/env_llm.sh
 
 export HF_HOME=/mnt/data/hf
@@ -12,11 +12,20 @@ export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 export LLM_DATA_ROOT=/mnt/data
 export LLM_MODEL_DIR=/mnt/data/models/Qwen2.5-1.5B-Instruct
 export LLM_SQUAD_DIR=/mnt/data/datasets/squad
-export LLM_RESULTS_ROOT=/mnt/data/results
+export LLM_GLUE_DIR=/mnt/data/datasets/glue
+
+# K5+: large run outputs on the second volume.
+export LLM_RESULTS_ROOT=/mnt/data2/results
+export LLM_CHECKPOINT_ROOT=/mnt/data2/checkpoints
+export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-/mnt/data2/hf/triton}"
 
 mkdir -p \
   "$HF_HOME" \
   "$HF_DATASETS_CACHE" \
   "$LLM_DATA_ROOT/models" \
   "$LLM_DATA_ROOT/results" \
-  "$LLM_SQUAD_DIR"
+  "$LLM_SQUAD_DIR" \
+  "$LLM_GLUE_DIR" \
+  "$LLM_RESULTS_ROOT" \
+  "$LLM_CHECKPOINT_ROOT" \
+  "$TRITON_CACHE_DIR"

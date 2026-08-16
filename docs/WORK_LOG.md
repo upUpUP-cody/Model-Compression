@@ -605,7 +605,46 @@ dense_baseline test **90.36%**。oneshot 在 ≥4x 仍崩溃（负结果保留�
    - 协议：`src/utils/squad_protocol.py`（官方 validation = 冻结 test）
    - 剪枝：`src/pruning/transformer_structured_pruning.py`（head KV-group + FFN 中间维，物理缩小）
    - 冒烟产物：`/mnt/data/results/qwen_squad_smoke/`（dense / oneshot；**不**声称 LLM 上 search 更优）
-5. **之后**：LLM iterative/search 小矩阵见 [PHASE_K_QWEN_PLAN.md](PHASE_K_QWEN_PLAN.md)；论文视觉章节见 [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md)
+5. [√] **Phase K5（2026-08-16）**：Level-1 LM 恢复 + iterative + 单候选 search；产物 `/mnt/data2/results/qwen_k5_smoke/`
+   - 入口：`experiments/run_qwen_k5_smoke.py` / `configs/qwen_k5_smoke.yaml`
+   - 完整多候选 AutonomousSearch 对 1.5B deepcopy 过重，K5 用单候选路径
+6. [√] **导师调整写入计划（2026-08-16）**：**SQuAD 小矩阵前先做 GLUE**（PHASE_K §KG：SST-2 冒烟 → RTE/QNLI）
+7. [√] **KG 代码落地（2026-08-16）**：`nyu-mll/glue` SST-2 协议 / prompt+verbalizer / 四方法入口；下载与单测通过
+8. [√] **KG.4 冒烟（2026-08-16）**：四方法跑通 → `/mnt/data2/results/qwen_glue_smoke/`
+9. [√] **任务区分锁定（2026-08-16）**：GLUE 正式标准 = **SST-2 + RTE + QNLI**；SQuAD = 长文抽答；**KG.5 必做门禁**；见 PHASE_K §1.1
+10. [√] **评测修复并重跑（2026-08-16）**：根因=`attn_implementation=eager` 乱码 + 无 chat template；改 SDPA + chat；dense acc≈84.4 / CE finite
+11. [√] **KG.5 三任务小扫（2026-08-16）**：SST-2+RTE+QNLI × 1.5x/2x 四方法；产物 `/mnt/data2/results/qwen_glue_kg5/`（~82 min；32 条 carved val；`kg5_summary.json`）
+    - 数字摘要：dense SST-2 84.4 / RTE 90.6 / QNLI 78.1（CE 均 finite）；oneshot 几乎全崩；完整表见 BRIEF / summary JSON
+    - **KG.5 结论（说明了什么）**：
+      1. **门禁通过**：评测可用；剪枝有代价；恢复有效 → **可开 K6**
+      2. **Oneshot 无恢复不可用**（六格几乎 acc≈0）→ 负结果，Level-1 恢复必要
+      3. **1.5x 档 iterative 更稳**（相对 dense 掉点约 16–28pt）；**2.0x 档掉点加大**（约 40–50pt）
+      4. **search vs iterative 已 crossover**（如 SST-2@1.5x iterative 68.8 > search 31.3；SST-2@2x search 68.8 > iterative 34.4；RTE@2x iterative 43.8 > search 37.5）→ 与 CIFAR **regime-dependent** 兼容，但 LLM 侧仅过渡证据
+      5. **读表修正**：iterative 实测超标（目标 1.5→~1.88；目标 2.0→~2.81），2x 格非严格同预算；CE proxy ≠ 任务 acc；n=32 噪声大
+    - **明确不说明**：不得写成论文 LLM 主结论或「search 系统全面更优」；不得替代 SQuAD F1/EM 主证据
+12. [√] **K6 预算对齐 + SQuAD 小矩阵（2026-08-16）**：产物 `/mnt/data2/results/qwen_k6/`（~49 min；`k6_summary.json`）
+    - 代码：`ratios_for_stage_target(..., baseline_parameter_count=dense)`；chat template 进 SQuAD eval/pack；`experiments/run_qwen_k6.py` / `configs/qwen_k6.yaml`
+    - 数字表（carved val n=16；非正式）：
+
+| 目标 | dense F1 | oneshot F1 | iterative F1 | search F1 | 实测压缩（o/i/s） |
+|------|----------|------------|--------------|-----------|-------------------|
+| 1.5x | 30.6 | 1.0 | 0.0 | 0.0 | 1.50 / 1.50 / 1.50 |
+| 2.0x | 30.6 | 0.0 | 0.0 | 0.0 | 2.00 / 2.00 / 2.00 |
+| 4.0x | 30.6 | 6.3 | 0.0 | 0.0 | 3.07 / 3.62 / 3.07 |
+
+    - **K6 结论（说明了什么）**：
+      1. **预算对齐成功**：1.5x/2.0x 不再叠乘超剪（对比 KG.5 的 ~1.88/~2.81）
+      2. **dense 评测可读**（chat+SDPA；CE≈1.60 finite）
+      3. **短 Level-1 恢复撑不起 SQuAD**：剪枝后 F1≈0（负结果）；CE 仍有限 ≠ 任务可用
+      4. **名义 4x（MLP-only）不可达**：上限约 3.07–3.62x
+    - **明确不说明**：非正式主表；不能比 search vs iterative；不能当论文 LLM 主证据；须加深恢复后再开 frozen test
+13. [√] **K6 加深恢复 1.5x（2026-08-16）**：`configs/qwen_k6_recover_1p5x.yaml` → `/mnt/data2/results/qwen_k6_recover_1p5x/`（~29 min）
+    - 旋钮：recovery epochs **4**；train **512**；eval **64**；预算仍对齐 1.50x
+    - 结果：dense F1≈25.5 / EM≈3.1；oneshot≈0.24；**iterative=0 / search=0**（CE 有限）
+    - **验收未过**：带恢复方法 F1 未明显高于 oneshot → **不扩 2x 方法对照**
+    - **研究含义**：当前 Level-1 加深仍撑不起生成式 SQuAD；论文 LLM 节宜写 **局限/负结果**（主贡献仍 CIFAR + GLUE 过渡）；非 regime 复现失败的借口去改主主张
+14. [√] **K6-lit 文献短表**：[K6_LIT_BASELINE_SHORTLIST.md](K6_LIT_BASELINE_SHORTLIST.md)（LTH / Wanda / SparseGPT / 结构化 LLM）
+15. **之后**：论文 Limitations 写清 SQuAD 恢复不足；可选更强恢复/适配器再试；frozen test 延后；不重跑 formal100
 
 Phase H / Phase I 证据：[EVIDENCE_PACK.md](EVIDENCE_PACK.md)。
 
