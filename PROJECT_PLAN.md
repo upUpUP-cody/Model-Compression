@@ -4,9 +4,9 @@
 >
 > **更新状态（2026-08-16）**
 >
-> - **已完成**：MVP；MNIST / CIFAR P1.2；formal100 主表与 crossover 机制；Phase K0–K5 **SQuAD 管线冒烟**；KG.0–KG.4 **SST-2 冒烟**。
-> - **当前优先**：论文收口 — CIFAR 主叙事 + GLUE 过渡；SQuAD 记为 **恢复不足局限**（加深 1.5x 后 F1 仍塌）。见 [docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)。
-> - **不默认**：重跑 CIFAR formal100；跳过 GLUE 直接开 SQuAD 正式对照；宣称 search 系统全面更优。
+> - **已完成**：MVP；MNIST / CIFAR P1.2；formal100 主表与 crossover 机制；Phase K0–K5 **SQuAD 管线冒烟**；KG.0–KG.5 **GLUE**；K6 预算对齐 + **LoRA@1.5x Informal**。
+> - **当前优先**：论文收口 — CIFAR 主叙事 + GLUE 过渡；SQuAD = **弱恢复负对照 + LoRA Informal 附录**（非 LLM 主表；不扩 2x）。见 [docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)。
+> - **不默认**：重跑 CIFAR formal100；宣称 search 系统全面更优；把 n=64 Informal 当正式主表。
 > - **主机**：1×RTX 4090（默认单卡；仅 Agent 判定需双卡拆任务时再加第 2 卡）；权重/数据 `/mnt/data`；LLM 运行产物 `/mnt/data2`。
 > - **资源告警**：加卡 / 配置优化触发标准见 [CLAUDE.md](CLAUDE.md)「LLM / GPU 与配置优化告知」。
 
@@ -565,7 +565,7 @@ search:
 
 ### 目标标准 (论文 LLM 复现)
 - [√] 先在 **GLUE 正式标准（SST-2 + RTE + QNLI）** 上给出同预算压缩对照信号（Phase K §KG.5；短文本闭集 NLU）
-- [ ] 再在 **SQuAD** 上达到可报告的 F1/EM（长文抽答；± 约定容差；**KG.5 门禁已满足**）
+- [ ] 再在 **SQuAD** 上达到可报告的 F1/EM（**LoRA Informal@1.5x 已可读**；正式主表 / frozen test 仍延后）
 - [ ] 优于 One-shot Wanda baseline 至少 10%（同协议对齐后）
 - [ ] 优于传统 IMP / 人工设计 iterative 至少 5%（同压缩预算）
 
@@ -643,14 +643,15 @@ flowchart TD
 - **磁盘**：实现前须先提醒用户扩盘（Qwen 权重/缓存/多次 run 通常还需 **30G+** 空闲）
 - 本阶段只写接口草图与实验矩阵，**不实现** Transformer 剪枝 / SQuAD pipeline；**不下载**权重
 
-### Phase K — LLM 实现（KG.5/K6/加深恢复/lit 短表 `[√]`；下一档 = 论文 Limitations 收口）
+### Phase K — LLM 实现（KG.5/K6/SGD 负对照/LoRA Informal/lit `[√]`；下一档 = 论文口径收口）
 
 - 执行计划：[docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)（**§1.1 任务区分**）
 - 模型锁定：`Qwen2.5-1.5B-Instruct`；大文件：`/mnt/data`（结果：`/mnt/data2`）
 - [√] K0–K5 管线；KG.5 GLUE 门禁；K6 预算对齐小扫
-- [√] **加深恢复 1.5x**：`/mnt/data2/results/qwen_k6_recover_1p5x/` — 剪枝 F1 仍≈0 → **不扩 2x**
+- [√] **加深 SGD 1.5x**：F1≈0 → 负对照（`qwen_k6_recover_1p5x`）
+- [√] **LoRA Informal 1.5x**：四方法可读；本格 iterative ≥ oneshot ≈ search（`qwen_k6_recover_lora_1p5x*`）
 - [√] K6-lit 短表：[`docs/K6_LIT_BASELINE_SHORTLIST.md`](docs/K6_LIT_BASELINE_SHORTLIST.md)
-- [ ] 论文 Limitations / frozen test（延后）；**不预设** search 全面更优
+- [ ] 论文口径收口 / frozen test（延后）；**不扩 2x**；**不预设** search 全面更优
 
 ---
 
@@ -661,7 +662,7 @@ flowchart TD
 3. [√] Phase J 规划：[`docs/PHASE_J_QWEN_PLAN.md`](docs/PHASE_J_QWEN_PLAN.md)
 4. [√] 论文成果提纲：[`docs/PAPER_RESULTS_OUTLINE.md`](docs/PAPER_RESULTS_OUTLINE.md)
 5. [√] Phase K SQuAD 管线冒烟：[`docs/PHASE_K_QWEN_PLAN.md`](docs/PHASE_K_QWEN_PLAN.md)（K0–K5）
-6. [√] KG.0–KG.5 GLUE；K6 SQuAD 小扫（预算对齐；`/mnt/data2/results/qwen_k6/`）
-7. **之后**：加深 SQuAD 恢复 → 再比方法 / frozen test；并行 K6-lit；不默认重跑 formal100
+6. [√] KG.0–KG.5 GLUE；K6 小扫 + SGD 负对照 + LoRA Informal
+7. **之后**：论文口径收口（Informal 附录）；不默认扩 2x / 不重跑 formal100
 
 执行顺序与验收细节仍以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 为准；实验结论以 WORK_LOG 为准；写论文以 PAPER_RESULTS_OUTLINE 为准；LLM 以 PHASE_K_QWEN_PLAN 为准。

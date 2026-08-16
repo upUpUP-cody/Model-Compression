@@ -47,5 +47,5 @@ accelerate>=0.20.0  # Hugging Face acceleration library
 bitsandbytes>=0.39.0  # Quantization utilities
 
 # Optional: for advanced features
-# peft>=0.4.0  # Parameter-Efficient Fine-Tuning (LoRA)
+peft>=0.4.0  # Parameter-Efficient Fine-Tuning (LoRA)
 # optimum>=1.9.0  # Hardware-optimized transformers

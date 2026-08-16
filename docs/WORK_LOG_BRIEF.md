@@ -10,28 +10,25 @@
 CIFAR 上 search vs iterative 是 **regime-dependent**（≤4x iterative 略稳；≥8x search 更高）。
 [×] 「系统全面更优」— 证据不支持。
 
+## LLM / SQuAD 结论（更新）
+
+| 项 | 结论 |
+|----|------|
+| 短/中 SGD 恢复 | 负对照：剪枝后 F1≈0（保留） |
+| LoRA @1.5x（8192×2） | F1 可读；预算 1.50x 对齐 |
+| Informal 排序（n=64） | **iterative 38.9 ≥ oneshot 30.6 ≈ search 30.0**（dense 25.5） |
+| 论文口径 | 附录/讨论 Informal；**非** LLM 主表；**不**写 search 更优 |
+| 2x / frozen test | 暂不扩 / 不开 |
+
 ## 已做
 
 1. [√] formal100 + 机制链；叙事定稿。
 2. [√] KG.5 GLUE 过渡门禁；K6 预算对齐 + SQuAD 小扫。
-3. [√] **加深恢复 1.5x**（4 epoch / 512 train / 64 eval）— 剪枝后 F1 仍塌。
-4. [√] K6-lit 短表：[K6_LIT_BASELINE_SHORTLIST.md](K6_LIT_BASELINE_SHORTLIST.md)
-
-## 现在处于哪一步
-
-加深恢复 1.5x（`/mnt/data2/results/qwen_k6_recover_1p5x/`，n=64）：
-
-| 方法 | 压缩 | F1 | CE |
-|------|------|-----|-----|
-| dense | 1.00x | 25.5 | 1.90 |
-| oneshot | 1.50x | 0.24 | 14.8 |
-| iterative_level1 | 1.50x | 0.0 | 7.33 |
-| autonomous_search | 1.50x | 0.0 | 5.59 |
-
-**验收未过** → **不扩 2x**。论文 LLM 节按 **局限/负结果** 收口（主贡献仍 CIFAR + GLUE 过渡）。
+3. [√] SGD 加深失败对照 + LoRA R1/方法扩展。
+4. [√] K6-lit 短表。
 
 ## 下一步
 
-1. 写论文 Limitations（SQuAD 短/中恢复不足）
-2. 可选：更强恢复或换设定后再试（非必须挡收口）
-3. frozen test / 方法 crossover 叙事延后
+1. 同步 PAPER_RESULTS_OUTLINE / EVIDENCE_PACK LLM 节为本口径
+2. Related Work 挂钩 LLM-Pruner（LoRA 恢复）
+3. 不默认扩 2x / 不重跑 formal100

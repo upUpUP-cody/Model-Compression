@@ -1,8 +1,10 @@
 # Phase K — Qwen / GLUE → SQuAD 实现计划
 
-> 状态：**K0–K5 `[√]`** · **KG.5 `[√]`** · **K6 小扫 + 加深恢复 1.5x `[√]`** · **K6-lit 短表 `[√]`** · 下一档 = **论文 Limitations 收口**（SQuAD F1 未恢复）
+> 状态：**K0–K5 `[√]`** · **KG.5 `[√]`** · **K6 小扫 + SGD 加深负对照 `[√]`** · **K6 LoRA@1.5x 四方法 Informal `[√]`** · **K6-lit 短表 `[√]`** · 下一档 = **论文口径收口**（Informal 附录；不扩 2x / 不开 frozen test）
 > 导师调整（2026-08-16）：**在继续 SQuAD 正式/小矩阵前，先做 GLUE 看压缩效果**
 > 任务锁定（2026-08-16）：**GLUE 正式标准 = SST-2 + RTE + QNLI**；KG.5 必做门禁；SQuAD = 生成式主考卷（见 §1.1）
+>
+> **当前结论（2026-08-16）**：短/中 SGD 恢复撑不起 SQuAD（负对照）；对齐文献的 **LoRA + 更大恢复预算** 后 1.5x 四方法 F1 可读（iterative ≥ oneshot ≈ search）；**非正式主表**；主贡献仍 CIFAR + GLUE 过渡。
 > 图例：`[√]` 已完成 · `[ ]` 未做 · `[×]` 证据不支持 / 不做
 > 规划前身：[PHASE_J_QWEN_PLAN.md](PHASE_J_QWEN_PLAN.md) · 视觉结论：[EVIDENCE_PACK.md](EVIDENCE_PACK.md) / [WORK_LOG.md](WORK_LOG.md)
 > 总路线：[PROJECT_PLAN.md](../PROJECT_PLAN.md) · 主机：RTX 4090 · 权重/数据：`/mnt/data` · 运行产物：`/mnt/data2`
@@ -238,21 +240,24 @@ python experiments/run_qwen_glue_smoke.py --config configs/qwen_glue_smoke.yaml
 | 产物 | `[√]` | `/mnt/data2/results/qwen_k6/` + `k6_summary.json` + WORK_LOG |
 | 叙事 | `[√]` | 小扫允许失败；**禁止**「search 全面更优」；F1 主表须标 n=16 carved val |
 
-**结果解读（2026-08-16）**：
+**结果解读（2026-08-16；含后续 LoRA）**：
 
 1. **预算对齐成功**：1.5x/2.0x 实测 ≈ 目标；不再出现 KG.5 式 ~2.8x 超剪。
-2. **dense 可读**：chat+SDPA 下 F1≈30.6（16 条）；CE finite。
-3. **短恢复不足**：1.5x/2x 上 oneshot/iterative/search 的 F1≈0（CE 仍有限）→ 剪枝伤生成式 QA，Level-1×1 epoch 拉不回。
-4. **4x 名义不可达（MLP-only）**：oneshot/search≈3.07x，iterative≈3.62x；须记上限或扩剪枝单元。
-5. **不说明**：非正式主表；不能证 search 优于 iterative；不能替代更大样本 / frozen test。
+2. **dense 可读**：chat+SDPA 下 F1≈30.6（16 条）/ ≈25.5（64 条）；CE finite。
+3. **短 SGD / 加深 SGD 不足（负对照）**：1 epoch 或 512×4 SGD 后剪枝 F1≈0（CE 仍有限）→ 弱恢复撑不起生成式 QA。
+4. **LoRA@1.5x Informal 可读**（8192×2；n=64；产物 `qwen_k6_recover_lora_1p5x*`）：dense 25.5 / oneshot 30.6 / iterative **38.9** / search 30.0；均 1.50x。本格 **iterative ≥ oneshot ≈ search**。
+5. **4x 名义不可达（MLP-only）**：oneshot/search≈3.07x，iterative≈3.62x；须记上限或扩剪枝单元。
+6. **不说明**：非正式主表；不能证 search 优于 iterative；不能替代多 seed / frozen test；不扩 2x。
 
 复跑：
 
 ```bash
 source scripts/env_llm.sh
 python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml
-# 仅评测冒烟：
-python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml --eval-only-dense
+# LoRA Informal（dense+oneshot）：
+python experiments/run_qwen_k6.py --config configs/qwen_k6_recover_lora_1p5x.yaml
+# LoRA Informal（iterative+search）：
+python experiments/run_qwen_k6.py --config configs/qwen_k6_recover_lora_1p5x_methods.yaml
 ```
 
 ### K6-lit — 外部压缩 baseline（自动搜索 vs 人工设计）`[~]` 文献短表已写
@@ -263,11 +268,11 @@ python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml --eval-only-dens
 | 子项 | 状态 | 内容 |
 |------|------|------|
 | 调研 | `[√]` | 短表已按质量门禁勾选 LTH / Wanda / SparseGPT / 结构化 LLM |
-| 选型 | `[√]` | 先 Related Work；复现挂 SQuAD/GLUE 同预算（待 F1 可读后） |
-| 对照问题 | `[ ]` | `autonomous_search` 是否优于人工设计 baseline（实验待加深恢复） |
-| 验收 | `[~]` | 短表已标注 venue/依据；复现实验未开 |
+| 选型 | `[√]` | 先 Related Work；复现挂 SQuAD/GLUE 同预算（F1 已 Informal 可读） |
+| 对照问题 | `[~]` | 内部 Informal：本格 iterative ≥ search；外部 lit 复现仍可选 |
+| 验收 | `[~]` | 短表已标注 venue/依据；外部复现实验未开 |
 
-**顺序**：调研可与 KG 并行；实验复现优先挂在 **GLUE**，再迁 SQuAD。
+**顺序**：调研可与 KG 并行；外部复现可选，非挡论文收口。
 
 ---
 
@@ -275,13 +280,13 @@ python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml --eval-only-dens
 
 CIFAR 定稿：**regime-dependent**（≤4x iterative 略稳；≥8x search 更高；机制随压缩率变）。
 
-LLM 上默认假设（待验，非结论）：
+LLM 上（更新后口径）：
 
-1. 同压缩 + 同恢复预算下，是否仍出现 crossover（**先在 GLUE 三任务上看趋势，再在 SQuAD 验证**）
-2. 门禁对 search 的贡献是否仍显著
-3. oneshot 在中高压缩是否同样崩溃或可恢复
+1. GLUE KG.5：过渡信号 + crossover 片段（非正式）
+2. SQuAD：弱恢复失败（负对照）；LoRA 后 1.5x Informal 可读，**本格未支持 search 优于 iterative**
+3. 不把 LLM Informal 升级为与 CIFAR 对等的主表
 
-论文位置：视觉为主结果；LLM 为 **第二域迁移 / 讨论**（GLUE 短 NLU 过渡 → SQuAD 长文抽答），见 [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md) 与本文 §1.1。
+论文位置：视觉为主结果；LLM 为 **第二域迁移 / 讨论**（GLUE 短 NLU 过渡 → SQuAD Informal），见 [PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md) 与本文 §1.1。
 
 ---
 
@@ -294,11 +299,13 @@ LLM 上默认假设（待验，非结论）：
 | K4 SQuAD 冒烟 | `configs/qwen_squad_smoke.yaml` / `experiments/run_qwen_squad_eval.py` |
 | K5 SQuAD 四方法 | `configs/qwen_k5_smoke.yaml` / `experiments/run_qwen_k5_smoke.py` |
 | SQuAD 协议 / 评估 / LM pack | `src/utils/squad_protocol.py` / `qwen_squad_eval.py` / `qwen_train_data.py` |
-| LM Level-1 恢复 | `src/recovery/qwen_lm_recovery.py` |
+| LM Level-1 恢复 | `src/recovery/qwen_lm_recovery.py`（含 `run_configured_recovery`） |
+| LM LoRA 恢复 | `src/recovery/qwen_lora_recovery.py` |
 | 剪枝后端 | `src/pruning/transformer_structured_pruning.py` |
 | **KG GLUE** | `configs/qwen_glue_smoke.yaml`、`experiments/run_qwen_glue_smoke.py`、`src/utils/glue_protocol.py`、`qwen_glue_eval.py`、`qwen_glue_train_data.py`、`src/experiments/qwen_glue_comparison.py` |
 | K4/K5 产物 | `/mnt/data/results/qwen_squad_smoke/`、`/mnt/data2/results/qwen_k5_smoke/` |
-| KG 产物 | `/mnt/data2/results/qwen_glue_smoke/` |
+| KG 产物 | `/mnt/data2/results/qwen_glue_smoke/`、`/mnt/data2/results/qwen_glue_kg5/` |
+| K6 LoRA Informal | `/mnt/data2/results/qwen_k6_recover_lora_1p5x/`、`..._methods/` |
 
 ---
 
@@ -316,11 +323,11 @@ LLM 上默认假设（待验，非结论）：
 - [√] **KG.0–KG.4**：GLUE SST-2 四方法冒烟管线 + 协议单测
 - [√] **评测稳定**：chat template + 去掉 eager attn；dense acc>0 且 CE finite（重跑 2026-08-16）
 - [√] **KG.5 必做**：SST-2+RTE+QNLI × 1.5x/2x；dense acc>0 / CE finite；oneshot 无恢复崩、iterative/search 部分恢复（`/mnt/data2/results/qwen_glue_kg5/`）；**过渡证据结论已记入 WORK_LOG**
-- [√] **开 K6 小扫**：SQuAD 1.5x–4x；预算对齐已修；产物 `qwen_k6`（F1 非正式；恢复不足）
-- [ ] frozen test 报告与 fingerprint / manifest（矩阵阶段）
-- [√] WORK_LOG 已记 KG.5 / K6 含义；冒烟指标不进主结论
-- [ ] K6-lit：外部压缩调研短表（过质量门禁；标注 venue/依据）
-- [ ] 加深恢复后再比 search vs iterative（当前 F1≈0 无法排序）
+- [√] **开 K6 小扫**：SQuAD 1.5x–4x；预算对齐已修；产物 `qwen_k6`（短恢复 F1 塌 = 负对照）
+- [ ] frozen test 报告与 fingerprint / manifest（延后）
+- [√] WORK_LOG 已记 KG.5 / K6 / LoRA Informal 含义；冒烟与 Informal 指标不进主结论
+- [√] K6-lit：外部压缩调研短表（过质量门禁；标注 venue/依据）
+- [√] LoRA 恢复后 Informal 可比 search vs iterative（本格 iterative ≥ search；非正式）
 
 ---
 
@@ -331,24 +338,25 @@ LLM 上默认假设（待验，非结论）：
 | Instruct 零样本乱码 | 曾因 `attn_implementation=eager` + 无 chat template | **已修**：SDPA + chat template；dense 冒烟 acc≈84% |
 | SQuAD 零样本 F1 偏低 | 生成式评测噪声大、成本高 | **先 GLUE 三任务看信号**；再回 SQuAD 优化模板/恢复 |
 | Instruct + GLUE | 分类任务需固定 prompt+verbalizer | §1.1 写死三任务标签；禁止中途混比 |
-| 显存 | 1.5B 全参恢复在 24GB 偏紧 | 延续 SGD / 小 batch / 短 seq；见既有 K5 经验 |
+| 显存 | 1.5B 全参 Adam 紧；LoRA 可训 | 默认 LoRA 恢复；全参 SGD 仅作负对照 |
 | 盘余量 | `/mnt/data` 偏紧 | GLUE 缓存写 `/mnt/data/datasets/glue`；结果写 `/mnt/data2` |
-| 评估速度 | SQuAD 全量生成慢 | 正因如此 KG 优先 |
-| **GPU / 加卡** | 本机基线 **1×4090**；runner 单进程串行；K6 实测显存约 7–10GB/24GB | **本趟 K6 不需要加卡**。仅当单卡预估 ≥约 3h 且可按 target 拆时才请用户加第 2 卡。规则见 [CLAUDE.md](../CLAUDE.md)「LLM / GPU 与配置优化告知」 |
+| 评估速度 | SQuAD 全量生成慢 | Informal 用 n=64；正因如此 KG 优先 |
+| **GPU / 加卡** | 本机基线 **1×4090**；LoRA Informal 显存约 10–13GB/24GB | **仍单卡即可**。仅当单卡预估 ≥约 3h 且可按 target 拆时才请用户加第 2 卡。规则见 [CLAUDE.md](../CLAUDE.md) |
 
-**本趟 K6 资源判定（2026-08-16）**：仍单卡即可；不中断、不改正在跑的 yaml。若之后多 seed / 更大 eval / 更长恢复且单卡 ≥3h 并可拆 —— 再按 CLAUDE.md 标准 A 请加第二张卡。
+**本趟资源判定（2026-08-16）**：仍单卡即可。
 
 ---
 
-## 8. 下一步（立即）`[ ]`
+## 8. 下一步（立即）
 
 1. [√] **稳定 GLUE 评测**：chat template + SDPA + CE float32（SST-2 已重跑，dense acc≈84%）
 2. [√] **下载补齐 RTE / QNLI**（与 SST-2 同缓存协议）
 3. [√] **KG.5（必做）**：SST-2+RTE+QNLI × 1.5x/2x 四方法小扫；可读信号已有（`qwen_glue_kg5`）
-4. [√] **K6（SQuAD）小矩阵**：预算对齐 + chat；`/mnt/data2/results/qwen_k6/`（非正式；剪枝后 F1 塌）
-5. [√] **加深 SQuAD 恢复 1.5x**：4 epoch / 512 / 64；iterative/search F1 仍≈0 → **不扩 2x**（`qwen_k6_recover_1p5x`）
-6. [√] **K6-lit**：短表 [K6_LIT_BASELINE_SHORTLIST.md](K6_LIT_BASELINE_SHORTLIST.md)
-7. [ ] 论文 Limitations / EVIDENCE_PACK LLM 附录；frozen test 延后
+4. [√] **K6（SQuAD）小矩阵**：预算对齐 + chat；`/mnt/data2/results/qwen_k6/`（短恢复 F1 塌）
+5. [√] **加深 SGD 1.5x**：负对照（`qwen_k6_recover_1p5x`）
+6. [√] **LoRA Informal 1.5x**：R1 + iterative/search（`qwen_k6_recover_lora_1p5x*`）
+7. [√] **K6-lit**：短表 [K6_LIT_BASELINE_SHORTLIST.md](K6_LIT_BASELINE_SHORTLIST.md)
+8. [ ] 论文口径收口：PAPER_RESULTS_OUTLINE / EVIDENCE_PACK 同步；**不扩 2x**；frozen test 延后
 
 ---
 

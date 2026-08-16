@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -226,3 +226,57 @@ def quick_lm_recovery(
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     return recoverer.model, history
+
+
+def run_configured_recovery(
+    pruned_model: nn.Module,
+    train_loader: DataLoader,
+    validation_loader: DataLoader,
+    config: Mapping[str, Any],
+    *,
+    epochs: Optional[int] = None,
+    copy_model: bool = True,
+    verbose: bool = True,
+) -> Tuple[nn.Module, Dict[str, Any]]:
+    """Dispatch SGD vs LoRA recovery from config['recovery']."""
+    recovery = dict(config.get("recovery") or {})
+    backend = str(recovery.get("backend", "sgd")).lower().strip()
+    device = str(config.get("hardware", {}).get("device", "cpu"))
+    precision = str(config.get("hardware", {}).get("precision", "fp16"))
+    resolved_epochs = int(epochs if epochs is not None else recovery.get("epochs", 1))
+    weight_decay = float(recovery.get("weight_decay", 0.0))
+
+    if backend in ("lora", "peft"):
+        from src.recovery.qwen_lora_recovery import quick_lora_recovery
+
+        learning_rate = float(recovery.get("learning_rate", 1e-4))
+        targets = recovery.get("lora_target_modules")
+        return quick_lora_recovery(
+            pruned_model,
+            train_loader,
+            validation_loader,
+            epochs=resolved_epochs,
+            learning_rate=learning_rate,
+            device=device,
+            verbose=verbose,
+            weight_decay=weight_decay,
+            copy_model=copy_model,
+            lora_r=int(recovery.get("lora_r", 8)),
+            lora_alpha=int(recovery.get("lora_alpha", 16)),
+            lora_dropout=float(recovery.get("lora_dropout", 0.05)),
+            target_modules=list(targets) if targets else None,
+        )
+
+    learning_rate = float(recovery.get("learning_rate", 2e-5))
+    return quick_lm_recovery(
+        pruned_model,
+        train_loader,
+        validation_loader,
+        epochs=resolved_epochs,
+        learning_rate=learning_rate,
+        device=device,
+        precision=precision,
+        verbose=verbose,
+        weight_decay=weight_decay,
+        copy_model=copy_model,
+    )

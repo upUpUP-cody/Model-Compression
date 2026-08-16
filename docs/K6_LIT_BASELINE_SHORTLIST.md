@@ -33,13 +33,23 @@
 | 内部自动搜索 | `autonomous_search`（当前单候选冒烟/小扫路径） |
 | 外部人工设计 | 上表短名单（先文献，后视复现成本） |
 
-## 当前实验约束（写进 Limitations）
+## 与本仓库恢复差距（已用 R1 验证）
 
-- KG.5 GLUE：有过渡可读信号；非正式主表。
-- K6 SQuAD 短恢复：剪枝后 F1 塌；**须加深恢复后再谈** search vs 人工设计。
+| 维度 | 旧 Level-1 SGD | 文献 / R1 LoRA |
+|------|----------------|----------------|
+| 数据 | 128–512 | LLM-Pruner ~50k；R1 用 SQuAD **8192** |
+| 优化 | 全参 SGD | LoRA + AdamW（对齐 LLM-Pruner） |
+| 1.5x oneshot F1 | ≈0.24（加深 SGD） | **≈30.6**（R1；n=64） |
+
+结论：SQuAD 塌点主要是恢复配方，不是协议坏了。P² Law 的 0.5B-token 级持续预训练仍超出本阶段预算。
+
+## 当前实验约束
+
+- KG.5 GLUE：过渡可读；非正式主表。
+- K6 SQuAD：LoRA 后 1.5x 四方法 F1 可读（iterative 38.9 / oneshot 30.6 / search 30.0；n=64）→ 可 Informal 对照；**仍不扩 2x**；不开 frozen test。
 - 外部方法能复现则挂 `/mnt/data2/results/qwen_*` 同协议；否则仅 Related Work。
 
 ## 下一步（lit）
 
-1. 论文 Related Work 按上表 4 条展开（各 3–5 句 + 声明差异）。
-2. 仅当 SQuAD 加深恢复后 F1 可读，再评估是否复现 Wanda/结构化剪枝作同预算外对照。
+1. 论文 Related Work 按上表 4 条展开（各 3–5 句 + 声明差异；强调 LLM-Pruner LoRA 恢复）。
+2. 评估是否复现 Wanda/结构化剪枝作同预算外对照（可选；非挡收口）。

@@ -13,7 +13,11 @@ from torch.utils.data import DataLoader
 from src.controller.heuristic_controller import HeuristicController
 from src.pruning.pruning_backend import resolve_pruning_backend
 from src.pruning.transformer_structured_pruning import TransformerStructuredPruning
-from src.recovery.qwen_lm_recovery import QwenLmCheapCritic, evaluate_lm_loss, quick_lm_recovery
+from src.recovery.qwen_lm_recovery import (
+    QwenLmCheapCritic,
+    evaluate_lm_loss,
+    run_configured_recovery,
+)
 from src.utils.device import resolve_device
 from src.utils.qwen_squad_eval import evaluate_squad_split
 from src.utils.squad_protocol import assert_test_not_in_selection_path
@@ -176,7 +180,9 @@ def run_method(
         model = source_model
         details["applied"] = False
     elif method == "oneshot":
-        model, details = _oneshot(source_model, config, device)
+        model, details = _oneshot(
+            source_model, config, device, train_loader=train_loader, validation_loader=validation_loader
+        )
     elif method == "iterative_level1":
         model, details = _iterative(source_model, train_loader, validation_loader, config, device)
     else:
@@ -201,7 +207,13 @@ def run_method(
     return result, model
 
 
-def _oneshot(source_model: nn.Module, config: Mapping[str, Any], device: str) -> Tuple[nn.Module, Dict[str, Any]]:
+def _oneshot(
+    source_model: nn.Module,
+    config: Mapping[str, Any],
+    device: str,
+    train_loader: DataLoader | None = None,
+    validation_loader: DataLoader | None = None,
+) -> Tuple[nn.Module, Dict[str, Any]]:
     target = float(config.get("comparison", {}).get("target_compression_ratio") or 0.0)
     backend = resolve_pruning_backend(source_model, "qwen")
     dense_count = count_params(source_model)
@@ -219,7 +231,7 @@ def _oneshot(source_model: nn.Module, config: Mapping[str, Any], device: str) ->
     before = dense_count
     model = backend.create_pruned_model(ratios).to(resolve_device(device))
     after = count_params(model)
-    return model, {
+    details: Dict[str, Any] = {
         "applied": True,
         "param_before": before,
         "param_after": after,
@@ -231,6 +243,33 @@ def _oneshot(source_model: nn.Module, config: Mapping[str, Any], device: str) ->
         "importance_method": "magnitude",
         "recovery": "none",
     }
+    apply_recovery = bool(config.get("comparison", {}).get("oneshot_recovery", False))
+    if apply_recovery:
+        if train_loader is None or validation_loader is None:
+            raise ValueError("oneshot_recovery requires train_loader and validation_loader")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        recovery_epochs = int(
+            config.get("comparison", {}).get(
+                "oneshot_recovery_epochs",
+                config.get("recovery", {}).get("epochs", 1),
+            )
+        )
+        model, history = run_configured_recovery(
+            model,
+            train_loader,
+            validation_loader,
+            config,
+            epochs=recovery_epochs,
+            copy_model=False,
+            verbose=True,
+        )
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        details["recovery"] = history
+        details["param_after_recovery"] = count_params(model)
+        details["compression_vs_dense"] = float(dense_count) / max(count_params(model), 1)
+    return model, details
 
 
 def _iterative(
@@ -245,8 +284,6 @@ def _iterative(
     if not isinstance(stage_targets, list) or not stage_targets:
         raise ValueError("comparison.iterative_stage_targets must be a non-empty list")
     recovery_epochs = int(comparison.get("iterative_recovery_epochs", config.get("recovery", {}).get("epochs", 1)))
-    recovery_lr = float(config.get("recovery", {}).get("learning_rate", 2e-5))
-    precision = str(config.get("hardware", {}).get("precision", "fp16"))
     dense_count = count_params(source_model)
     model = copy.deepcopy(source_model).to(resolve_device(device))
     stages = []
@@ -263,16 +300,14 @@ def _iterative(
         after = count_params(model)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        model, history = quick_lm_recovery(
+        model, history = run_configured_recovery(
             model,
             train_loader,
             validation_loader,
+            config,
             epochs=recovery_epochs,
-            learning_rate=recovery_lr,
-            device=device,
-            precision=precision,
-            verbose=False,
             copy_model=False,
+            verbose=False,
         )
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -371,16 +406,14 @@ def _search(
         max_samples=int(search_config.get("cheap_eval_samples", 2)),
         device=device,
     )
-    recovered, recovery_history = quick_lm_recovery(
+    recovered, recovery_history = run_configured_recovery(
         candidate,
         train_loader,
         validation_loader,
+        config,
         epochs=int(recovery_config["epochs"]),
-        learning_rate=float(recovery_config["learning_rate"]),
-        device=device,
-        precision=str(config["hardware"].get("precision", "fp16")),
-        verbose=False,
         copy_model=False,
+        verbose=False,
     )
     del candidate
     if torch.cuda.is_available():

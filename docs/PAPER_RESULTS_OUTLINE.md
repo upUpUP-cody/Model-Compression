@@ -91,6 +91,8 @@
 | oneshot 高压缩崩溃 | 负结果，说明恢复必要 |
 | 历史 search=1.00x / 过冲 7.66x / ≥4x 欠压 | **作废或不作主对照**；已用门禁顺序、止损、增量逼近、过冲硬顶修复 |
 | smoke（20 epoch）vs formal（100 epoch） | **分列**；主表只用 formal |
+| SQuAD 短/中 SGD 恢复后 F1≈0 | **负对照保留**：弱恢复撑不起生成式 QA |
+| SQuAD LoRA Informal 中 dense F1 < pruned | **不解释为剪枝更好**；n=64 噪声 + 任务适配 |
 
 ---
 
@@ -102,14 +104,16 @@
 - 同压缩预算下 CIFAR **regime-dependent** crossover
 - 高压缩优势可拆为增量路径与 2pt 门禁；贡献随压缩率变化
 - 4x 同结构下差距来自恢复轨迹；硬一步会因缺中间恢复变差
+- SQuAD：弱恢复失败（负对照）+ LoRA@1.5x Informal 表（附录）；本格 iterative ≥ oneshot ≈ search
 
 ### 不能写
 
-- [×] search **系统全面**优于 iterative
-- [×] LoRA / 自蒸馏无条件优于 Level-1
+- [×] search **系统全面**优于 iterative（含 LLM Informal）
+- [×] LoRA / 自蒸馏无条件优于 Level-1（CIFAR）；但 LLM 侧可写「对齐文献的 LoRA 恢复使 SQuAD F1 可读」
 - [×] smoke 与 formal 混为同一主表
 - [×] 用历史欠压/过冲 search 的高分与高压缩 iterative 混比刷优势
 - [×] 把未同协议、未同压缩预算对齐的外部论文数字直接当「我们更好」的证据
+- [×] 把 n=64 SQuAD Informal 升级为论文 LLM 主表 / regime 复现
 
 ---
 
@@ -154,7 +158,7 @@
 3. 能在本协议下复现 → CIFAR 主表之后的 External baselines 小节，或 Phase K 的 `/mnt/data2/results/qwen_glue_*`（优先）/ `qwen_*`（SQuAD）同协议对照。
 4. 不能公平复现 → 只进 Related Work 文献对比，**不进主表、不进主主张**。
 
-**约束**：外部 baseline 是补强对照，**不替换**内部 iterative；叙事仍为 regime-dependent，禁止未证成的「search 系统全面更优」。LLM 侧：**KG.5 GLUE（SST-2+RTE+QNLI）** 仅作过渡/门禁证据（oneshot 无恢复崩；search vs iterative 已 crossover；非正式主表）；**论文 LLM 主证据仍为 SQuAD F1/EM**（见 PHASE_K §1.1 / §KG.5；结论记入 WORK_LOG）。
+**约束**：外部 baseline 是补强对照，**不替换**内部 iterative；叙事仍为 regime-dependent，禁止未证成的「search 系统全面更优」。LLM 侧：**KG.5 GLUE** = 过渡/门禁；**SQuAD** = 弱恢复负对照 + LoRA@1.5x Informal 附录（非主表）；结论见 WORK_LOG §4.17。
 
 ---
 
@@ -168,8 +172,8 @@
 | Experiments | MNIST 协议正确性 → CIFAR formal100 主表（§3）→ **External baselines（若复现）** |
 | Ablations | §4 机制表 + 预算对齐 + 一步诊断；恢复 L1/2/3 |
 | Discussion | 为何必须同压缩；门禁科学含义；负结果；smoke≠formal；自动 vs 人工的边界 |
-| LLM / 迁移 | KG.5 GLUE 过渡 `[√]`；K6 SQuAD：预算对齐 `[√]`；**加深恢复 1.5x 后剪枝 F1 仍≈0** → 写 Limitations，不写 LLM regime 复现；K6-lit 短表已有 |
-| Limitations / Future | SQuAD 生成式 QA 对 Level-1 中短期恢复极脆；MLP-only 名义 4x 不可达；外部 baseline 先文献 |
+| LLM / 迁移 | KG.5 GLUE 过渡 `[√]`；K6 预算对齐 `[√]`；**SGD 加深 = 负对照（F1≈0）**；**LoRA@1.5x Informal 可读**（iterative 38.9 / oneshot 30.6 / search 30.0；n=64）→ 附录/讨论，**不写 LLM regime 主复现**；K6-lit 短表已有 |
+| Limitations / Future | 弱恢复下生成式 QA 极脆；MLP-only 名义 4x 不可达；Informal≠正式主表；外部 baseline 先文献 |
 
 ---
 
@@ -184,8 +188,9 @@
 | 恢复消融（多 seed） | `results/cifar_recovery_ablation_multiseed/` |
 | MNIST 主 sweep | `results/p12_comparison_gpu_sweep/` |
 | KG.5 GLUE 过渡（非正式） | `/mnt/data2/results/qwen_glue_kg5/` |
-| K6 SQuAD 小扫（非正式） | `/mnt/data2/results/qwen_k6/` |
-| K6 加深恢复 1.5x（负结果） | `/mnt/data2/results/qwen_k6_recover_1p5x/` |
+| K6 SQuAD 小扫（短恢复负对照） | `/mnt/data2/results/qwen_k6/` |
+| K6 加深 SGD 1.5x（负对照） | `/mnt/data2/results/qwen_k6_recover_1p5x/` |
+| K6 LoRA Informal 1.5x | `/mnt/data2/results/qwen_k6_recover_lora_1p5x/`、`..._methods/` |
 | K6-lit 短表 | `docs/K6_LIT_BASELINE_SHORTLIST.md` |
 
 详细索引与复现命令见 [EVIDENCE_PACK.md](EVIDENCE_PACK.md) §8。

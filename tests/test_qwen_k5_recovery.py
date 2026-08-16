@@ -7,7 +7,8 @@ from transformers import Qwen2Config, Qwen2ForCausalLM
 
 from src.experiments.qwen_k5_comparison import magnitude_importance_mlp, mlp_only_layer_names
 from src.pruning.pruning_backend import resolve_pruning_backend
-from src.recovery.qwen_lm_recovery import evaluate_lm_loss, quick_lm_recovery
+from src.recovery.qwen_lm_recovery import evaluate_lm_loss, quick_lm_recovery, run_configured_recovery
+from src.recovery.qwen_lora_recovery import quick_lora_recovery
 from src.utils.qwen_train_data import SquadCausalLmDataset, build_squad_lm_loaders
 from src.utils.squad_protocol import assert_test_not_in_selection_path
 
@@ -109,6 +110,63 @@ def test_lm_recovery_one_step_and_mlp_prune():
 
     importance = magnitude_importance_mlp(pruned)
     assert names[0] in importance or any(k.endswith(".mlp.intermediate") for k in importance)
+
+
+def test_lora_recovery_one_step_merges():
+    peft = pytest.importorskip("peft")
+    del peft
+    model = _tiny_qwen()
+    tok = _FakeTok()
+    splits = {"train": _fake_examples(6), "validation": _fake_examples(4)}
+    train_loader, val_loader = build_squad_lm_loaders(
+        splits, tok, batch_size=2, max_seq_len=64, train_max_samples=6, validation_max_samples=4
+    )
+    backend = resolve_pruning_backend(model, "qwen")
+    names = mlp_only_layer_names(model)
+    pruned = backend.create_pruned_model({names[0]: 0.5})
+    recovered, history = quick_lora_recovery(
+        pruned,
+        train_loader,
+        val_loader,
+        epochs=1,
+        learning_rate=1e-3,
+        device="cpu",
+        verbose=False,
+        lora_r=4,
+        lora_alpha=8,
+    )
+    assert history["recovery_kind"] == "qwen_lora_ce"
+    assert history["merged"] is True
+    assert history["best_validation_loss"] is not None
+    assert not hasattr(recovered, "peft_config")
+    metrics = evaluate_lm_loss(recovered, val_loader, device="cpu")
+    assert metrics["loss"] >= 0.0
+
+
+def test_run_configured_recovery_dispatches_lora():
+    pytest.importorskip("peft")
+    model = _tiny_qwen()
+    tok = _FakeTok()
+    splits = {"train": _fake_examples(4), "validation": _fake_examples(2)}
+    train_loader, val_loader = build_squad_lm_loaders(
+        splits, tok, batch_size=2, max_seq_len=64, train_max_samples=4, validation_max_samples=2
+    )
+    config = {
+        "hardware": {"device": "cpu", "precision": "fp32"},
+        "recovery": {
+            "backend": "lora",
+            "epochs": 1,
+            "learning_rate": 1e-3,
+            "lora_r": 4,
+            "lora_alpha": 8,
+        },
+    }
+    recovered, history = run_configured_recovery(
+        model, train_loader, val_loader, config, copy_model=True, verbose=False
+    )
+    assert history["recovery_kind"] == "qwen_lora_ce"
+    assert history["merged"] is True
+    assert sum(p.numel() for p in recovered.parameters()) > 0
 
 
 def test_build_loaders_rejects_test_key():

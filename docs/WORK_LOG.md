@@ -644,7 +644,57 @@ dense_baseline test **90.36%**。oneshot 在 ≥4x 仍崩溃（负结果保留�
     - **验收未过**：带恢复方法 F1 未明显高于 oneshot → **不扩 2x 方法对照**
     - **研究含义**：当前 Level-1 加深仍撑不起生成式 SQuAD；论文 LLM 节宜写 **局限/负结果**（主贡献仍 CIFAR + GLUE 过渡）；非 regime 复现失败的借口去改主主张
 14. [√] **K6-lit 文献短表**：[K6_LIT_BASELINE_SHORTLIST.md](K6_LIT_BASELINE_SHORTLIST.md)（LTH / Wanda / SparseGPT / 结构化 LLM）
-15. **之后**：论文 Limitations 写清 SQuAD 恢复不足；可选更强恢复/适配器再试；frozen test 延后；不重跑 formal100
+15. [√] **K6 R1 LoRA 恢复烟测（2026-08-16）**：`configs/qwen_k6_recover_lora_1p5x.yaml` → `/mnt/data2/results/qwen_k6_recover_lora_1p5x/`（~1h；仍单卡）
+    - 配方：peft LoRA r=8 + AdamW 1e-4 + SQuAD chat packs **8192** × **2** epoch；oneshot 后挂恢复（`oneshot_recovery: true`）
+    - 代码：`src/recovery/qwen_lora_recovery.py`；`run_configured_recovery` 分发 `backend: lora|sgd`
+    - 结果（carved val n=64）：
+
+| 方法 | 压缩 | F1 | EM | CE |
+|------|------|-----|-----|-----|
+| dense | 1.00x | 25.5 | 3.1 | 1.90 |
+| oneshot+LoRA | 1.50x | **30.6** | **23.4** | 0.84 |
+
+    - 对照 deepen-SGD（512×4）：oneshot F1≈0.24 → **R1 门禁通过**（F1>>1，且远高于 SGD 加深）
+    - 说明：失败主因是恢复配方/预算，不是评测或压缩预算；oneshot F1>dense 属小样本噪声+任务适配，不宣称「剪枝更强」
+16. [√] **K6 R1-pass 方法扩展（2026-08-16）**：`configs/qwen_k6_recover_lora_1p5x_methods.yaml` → `/mnt/data2/results/qwen_k6_recover_lora_1p5x_methods/`（~2.7h；仍单卡）
+    - iterative ~109 min；search ~55 min；预算均 **1.50x**
+    - **Informal 1.5x 四方法合并表**（R1 + methods；n=64；非正式）：
+
+| 方法 | 压缩 | F1 | EM | CE |
+|------|------|-----|-----|-----|
+| dense | 1.00x | 25.5 | 3.1 | 1.90 |
+| oneshot+LoRA | 1.50x | 30.6 | 23.4 | 0.84 |
+| iterative_level1+LoRA | 1.50x | **38.9** | **29.7** | 0.74 |
+| autonomous_search+LoRA | 1.50x | 30.0 | 23.4 | 0.79 |
+
+    - **说明了什么**：同 LoRA 配方下生成式 F1 可读；本 informal 格 **iterative ≥ oneshot ≈ search**（与「search 必然更好」不符，与 CIFAR regime-dependent 兼容但 **不得当论文 LLM 主结论**）
+    - **明确不说明**：n=64 噪声大；search 仍是单候选路径；dense F1 低于 pruned 不解释为「剪枝更好」；**仍不扩 2x / 不开 frozen test**
+17. [√] **当前结论更新（2026-08-16 晚）** — SQuAD / Phase K 收口叙事：
+
+**总判断（定稿口径）**
+
+| 层级 | 结论 |
+|------|------|
+| 主贡献 | 仍是 **CIFAR regime-dependent** + **KG.5 GLUE 过渡** |
+| SQuAD 短/中 SGD 恢复 | **负对照保留**：短 Level-1 与加深 SGD（512×4）剪枝后 F1≈0 |
+| SQuAD LoRA 恢复 @1.5x | **Informal 可读**：四方法 F1 25–39；预算对齐 1.50x |
+| 方法排序（本 informal 格） | **iterative ≥ oneshot ≈ search**；与「search 必然更好」不符 |
+| 论文 LLM 主表 | **仍非正式**（n=64；单 seed；单候选 search；frozen test 未开） |
+| 2x / frozen test | **暂不扩 / 不开** |
+
+**能写进论文的句子（建议）**
+
+1. 生成式 SQuAD 对弱恢复极脆：短 SGD / 中等 SGD 加深后 F1 塌（负结果）。
+2. 对齐文献的 LoRA + 更大指令式恢复预算后，同压缩 1.5x 下 F1/EM 可读（附录/讨论 Informal 表）。
+3. 本 informal 格未支持「autonomous_search 优于 iterative」；与 CIFAR regime-dependent 叙事兼容，但不升级为 LLM 主主张。
+
+**不能写**
+
+- 「LLM 上已复现 regime crossover / search 全面更优」
+- 「剪枝后优于 dense」（dense F1 低于 pruned 属小样本噪声）
+- 把 n=64 Informal 表当正式主表
+
+18. **之后**：PAPER_RESULTS_OUTLINE / EVIDENCE_PACK 同步本口径；Related Work 挂钩 LLM-Pruner；不默认扩 2x / 不重跑 formal100
 
 Phase H / Phase I 证据：[EVIDENCE_PACK.md](EVIDENCE_PACK.md)。
 
