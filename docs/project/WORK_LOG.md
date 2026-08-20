@@ -1,6 +1,6 @@
 # 工作日志（按实验 ID）
 
-> **唯一标准**：[refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf](refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf) §31 整体实验清单（E0–E14）。
+> **唯一标准**：[refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf](../refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf) §31 整体实验清单（E0–E14）。
 > 要求摘录：[PDF_E_REQUIREMENTS_31_34.md](PDF_E_REQUIREMENTS_31_34.md) · 状态总表：[EXPERIMENT_E_MAP.md](EXPERIMENT_E_MAP.md) · 精简：[WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md) · 交付：[MENTOR_DELIVERY.md](MENTOR_DELIVERY.md)
 > 更新：2026-08-20 · 主机：1×RTX 4090 · E 产物：`/mnt/data2/results/E{n}_*/`
 
@@ -34,7 +34,7 @@
 |----|------|
 | 目的 | 建立评价基准 |
 | 状态 | **done_proxy**（`proxy_1.5B`；PDF 要 Qwen2.5-3B） |
-| 产物 | `/mnt/data2/results/E0_dense_baseline/` · [e_reports/E0_dense_baseline.md](e_reports/E0_dense_baseline.md) |
+| 产物 | `/mnt/data2/results/E0_dense_baseline/` · [../results/E0_dense_baseline.md](../results/E0_dense_baseline.md) |
 | 要点 | SST-2 LM PPL≈1.99；Instruction proxy_acc≈59.3；Math/Knowledge/Reasoning/Code = n/a |
 | 成功条件（PDF） | 全 benchmark pipeline 可复现 → **部分满足** |
 
@@ -46,7 +46,7 @@
 |----|------|
 | 目的 | Frontier 是否存在（performance cliff / capability-specific） |
 | 状态 | **done_proxy** |
-| 产物 | `/mnt/data2/results/E1_oneshot_sparsity_curve/`（含 `figures/performance_vs_sparsity.png`） · [报告](e_reports/E1_oneshot_sparsity_curve.md) |
+| 产物 | `/mnt/data2/results/E1_oneshot_sparsity_curve/`（含 `figures/performance_vs_sparsity.png`） · [报告](../results/E1_oneshot_sparsity_curve.md) |
 | 要点 | sparsity 10%–70%；方法为 magnitude MLP **代理** Wanda；剪后 PPL 爆炸 |
 | Gate A | **暂不可判**（方法过糙，非可信 cliff） |
 
@@ -58,7 +58,7 @@
 |----|------|
 | 目的 | 逐步搜索是否必要 |
 | 状态 | **done_proxy** |
-| 产物 | `/mnt/data2/results/E2_iterative_vs_oneshot/` · [报告](e_reports/E2_iterative_vs_oneshot.md) |
+| 产物 | `/mnt/data2/results/E2_iterative_vs_oneshot/` · [报告](../results/E2_iterative_vs_oneshot.md) |
 | 要点 | 仅 40%/50%、单 seed；无稳定 iterative 优势 |
 | Gate A | **暂不可判** |
 
@@ -70,7 +70,7 @@
 |----|------|
 | 目的 | Gap 是否预测损伤 |
 | 状态 | **done_proxy** |
-| 产物 | `/mnt/data2/results/E3_compression_gap/` · [报告](e_reports/E3_compression_gap.md) |
+| 产物 | `/mnt/data2/results/E3_compression_gap/` · [报告](../results/E3_compression_gap.md) |
 | 要点 | pool n=64（PDF 要 2k–5k）；corr=nan；信号弱 |
 | Gate B | 须与 **E9** 一并判断；仅 E3 不足下最终结论 |
 

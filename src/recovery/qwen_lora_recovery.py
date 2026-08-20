@@ -109,12 +109,48 @@ class QwenLoraRecovery:
             return 0.0
         return total / batches
 
+    def train_steps(
+        self,
+        train_loader: DataLoader,
+        max_steps: int,
+        verbose: bool = True,
+    ) -> float:
+        """Run up to max_steps optimizer updates (cycles loader if needed)."""
+        if max_steps < 0:
+            raise ValueError("max_steps must be non-negative")
+        if max_steps == 0:
+            return 0.0
+        self.model.train()
+        total = 0.0
+        steps = 0
+        data_iter = iter(train_loader)
+        while steps < max_steps:
+            try:
+                batch = next(data_iter)
+            except StopIteration:
+                data_iter = iter(train_loader)
+                batch = next(data_iter)
+            batch = _move_batch(batch, self.device)
+            self.optimizer.zero_grad(set_to_none=True)
+            loss = _batch_loss(self.model, batch)
+            value = float(loss.detach().float().item())
+            if not math.isfinite(value):
+                continue
+            loss.backward()
+            self.optimizer.step()
+            total += value
+            steps += 1
+            if verbose and (steps == 1 or steps == max_steps or steps % 50 == 0):
+                print(f"  [LoRA step] {steps}/{max_steps} loss={value:.4f}")
+        return total / max(steps, 1)
+
     def recover(
         self,
         train_loader: DataLoader,
         validation_loader: DataLoader,
         epochs: int = 2,
         verbose: bool = True,
+        max_steps: Optional[int] = None,
     ) -> Dict[str, Any]:
         if isinstance(epochs, bool) or not isinstance(epochs, int) or epochs < 0:
             raise ValueError("epochs must be a non-negative integer")
@@ -131,9 +167,27 @@ class QwenLoraRecovery:
             "best_validation_loss": None,
             "best_validation_accuracy": None,
             "merged": False,
+            "max_steps": max_steps,
+            "steps_ran": None,
         }
         best_state = None
-        if epochs == 0:
+
+        if max_steps is not None:
+            if verbose:
+                print(
+                    f"[LoRA LM Recovery] max_steps={max_steps} r={self.lora_r} "
+                    f"targets={self.target_modules}"
+                )
+            train_loss = self.train_steps(train_loader, int(max_steps), verbose=verbose)
+            metrics = evaluate_lm_loss(self.model, validation_loader, device=str(self.device))
+            history["train_loss"].append(train_loss)
+            history["validation_loss"].append(metrics["loss"])
+            history["validation_accuracy"].append(metrics["accuracy"])
+            history["best_epoch"] = 0
+            history["best_validation_loss"] = float(metrics["loss"])
+            history["best_validation_accuracy"] = float(metrics["accuracy"])
+            history["steps_ran"] = int(max_steps)
+        elif epochs == 0:
             metrics = evaluate_lm_loss(self.model, validation_loader, device=str(self.device))
             history["best_epoch"] = 0
             history["best_validation_loss"] = metrics["loss"]
@@ -190,6 +244,7 @@ def quick_lora_recovery(
     lora_alpha: int = 16,
     lora_dropout: float = 0.05,
     target_modules: Optional[Sequence[str]] = None,
+    max_steps: Optional[int] = None,
 ) -> Tuple[nn.Module, Dict[str, Any]]:
     """Level-1 LoRA recovery entrypoint; returns a merged plain LM."""
     if torch.cuda.is_available():
@@ -210,6 +265,7 @@ def quick_lora_recovery(
         validation_loader=validation_loader,
         epochs=epochs,
         verbose=verbose,
+        max_steps=max_steps,
     )
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

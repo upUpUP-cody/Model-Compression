@@ -1,7 +1,7 @@
 # Repository structure (PDF §23 mapping)
 
-Program PDFs: [refs/Autonomous_Lottery_Ticket_Discovery.pdf](refs/Autonomous_Lottery_Ticket_Discovery.pdf),
-[refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf](refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf).
+Program PDFs: [refs/Autonomous_Lottery_Ticket_Discovery.pdf](../refs/Autonomous_Lottery_Ticket_Discovery.pdf),
+[refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf](../refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf).
 
 Experiment progress: [EXPERIMENT_E_MAP.md](EXPERIMENT_E_MAP.md)（**唯一 ID 标准**：E0–E14）。
 Report layout: [E_REPORT_TEMPLATE.md](E_REPORT_TEMPLATE.md).
@@ -24,8 +24,8 @@ Python package root remains **`src/`** (not renamed) to keep imports stable.
 
 ## Main tree vs archive
 
-- **Main:** Stage A–D configs/experiments, core `src/`, `tests/`, E docs（E-MAP / WORK_LOG / e_reports）、交付页。
-- **Archive:** [../archive/README.md](../archive/README.md) — 旧 Phase*/EVIDENCE_PACK、旧 yaml、旧 runners。
+- **Main:** Stage A–D configs/experiments, core `src/`, `tests/`；文档分层见 [`../README.md`](../README.md)（`project/` / `process/` / `results/`）。
+- **Archive:** [../../archive/README.md](../../archive/README.md) — 旧 Phase*/EVIDENCE_PACK、旧 yaml、旧 runners。
 
 ## Results layout (not in Git)
 
@@ -36,4 +36,4 @@ Python package root remains **`src/`** (not renamed) to keep imports stable.
   figures/
 ```
 
-Human copies under `docs/e_reports/`.
+Human copies under `docs/results/`.

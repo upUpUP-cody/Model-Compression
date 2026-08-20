@@ -251,6 +251,7 @@ def run_configured_recovery(
 
         learning_rate = float(recovery.get("learning_rate", 1e-4))
         targets = recovery.get("lora_target_modules")
+        max_steps = recovery.get("max_steps")
         return quick_lora_recovery(
             pruned_model,
             train_loader,
@@ -265,6 +266,7 @@ def run_configured_recovery(
             lora_alpha=int(recovery.get("lora_alpha", 16)),
             lora_dropout=float(recovery.get("lora_dropout", 0.05)),
             target_modules=list(targets) if targets else None,
+            max_steps=int(max_steps) if max_steps is not None else None,
         )
 
     learning_rate = float(recovery.get("learning_rate", 2e-5))

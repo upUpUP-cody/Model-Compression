@@ -11,12 +11,12 @@ PDF 默认模型：**Qwen2.5-3B-Instruct**。当前磁盘仅 **1.5B** → Stage 
 
 | E | PDF 目的 | Stage | 状态 | 产物目录 |
 |---|----------|-------|------|----------|
-| E0 | Dense baseline | A | done_proxy | `/mnt/data2/results/E0_dense_baseline/` · [e_reports](e_reports/) |
+| E0 | Dense baseline | A | done_proxy | `/mnt/data2/results/E0_dense_baseline/` · [results](../results/) |
 | E1 | One-shot sparsity curve | A | done_proxy | `/mnt/data2/results/E1_oneshot_sparsity_curve/` |
 | E2 | Iterative vs one-shot | A | done_proxy | `/mnt/data2/results/E2_iterative_vs_oneshot/` |
 | E3 | Compression Gap | A | done_proxy | `/mnt/data2/results/E3_compression_gap/` |
 | E4–E7 | Adaptive search | B | pending | — |
-| E8 | Random recovery | C | pending（须 E3 后） | — |
+| E8 | Random recovery | C | **partial_smoke**（n=256/seed42/steps30） | `/mnt/data2/results/E8_random_recovery/` |
 | E9 | High-Gap recovery | C | pending | — |
 | E10–E11 | Frontier data | C | pending | — |
 | E12–E14 | Self-compression | D | pending | **禁止插队** |
@@ -41,4 +41,4 @@ PDF 默认模型：**Qwen2.5-3B-Instruct**。当前磁盘仅 **1.5B** → Stage 
 
 ## 下一步
 
-审阅 E0–E3（Gate A：**本 proxy 暂不可判**）→ 再开 **E8→E9**；不启动 E13。
+审阅 E0–E3 → 执行入口 [`../process/NEXT_E8_E9.md`](../process/NEXT_E8_E9.md)；不启动 E13。

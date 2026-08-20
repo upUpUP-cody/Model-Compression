@@ -13,7 +13,7 @@
 | E8–E9 | pending（第一批后半） |
 | E10–E14 | pending（E13 不插队） |
 
-产物：`/mnt/data2/results/E{0-3}_*/` · `docs/e_reports/`
+产物：`/mnt/data2/results/E{0-3}_*/` · `docs/results/`
 
 ## Non-E（附录）
 

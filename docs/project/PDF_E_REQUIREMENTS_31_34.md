@@ -1,6 +1,6 @@
 # PDF 实验执行表 §31–34 要求记录
 
-> 来源：[Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf](refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf)
+> 来源：[Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf](../refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf)
 > 文内页码 **31–34**（PDF 文件约第 **16–20** 页）；规格细节交叉引用同 PDF 前部 E0–E3 / E8–E9（约第 1–4、9–10 页）
 > 记录日期：2026-08-20 · 执行对照：[EXPERIMENT_E_MAP.md](EXPERIMENT_E_MAP.md)
 
@@ -39,7 +39,7 @@
 | E13 | Self vs external | Self-governance frontier | P1 |
 | E14 | Full autonomous run | Autonomous Lottery Ticket | P2 |
 
-**本仓库要求**：每个已跑 ID 的产物目录为 `/mnt/data2/results/E{n}_{slug}/`，含 `e{n}_report.md` + `e{n}_summary.json`；人类索引在 `docs/e_reports/`。禁止把非 E 过渡实验改贴成已完成 En。
+**本仓库要求**：每个已跑 ID 的产物目录为 `/mnt/data2/results/E{n}_{slug}/`，含 `e{n}_report.md` + `e{n}_summary.json`；人类索引在 `docs/results/`。禁止把非 E 过渡实验改贴成已完成 En。
 
 ---
 
@@ -166,7 +166,7 @@ PDF 原话要点：第一阶段甚至**完全不需要 Agent**。
 | E3 | `…/E3_compression_gap/` | pool n=64；corr=nan | **Gate B 待 E9**；本 proxy 信号弱 |
 | E8–E9 | — | 未开 | 审阅 E0–E3 后再开 |
 
-人类镜像：`docs/e_reports/E{0–3}_*.md` · 索引：`/mnt/data2/results/README_E_INDEX.md`。
+人类镜像：`docs/results/E{0–3}_*.md` · 索引：`/mnt/data2/results/README_E_INDEX.md`。
 
 ---
 
@@ -179,7 +179,7 @@ PDF 原话要点：第一阶段甚至**完全不需要 Agent**。
 /mnt/data2/results/E3_compression_gap/
 …（E4+ 同理）
 
-docs/e_reports/E0_dense_baseline.md   # 链到或摘录报告
+docs/results/E0_dense_baseline.md   # 链到或摘录报告
 ```
 
 非 E 历史产物（`qwen_glue_*` / `qwen_k6_*`）保留原路径，仅在 E-MAP「Non-E / proxy」登记，**不**迁入 `E*` 目录冒充。

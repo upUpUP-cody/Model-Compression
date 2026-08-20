@@ -1,6 +1,6 @@
 # 开发与实验工作流
 
-当前执行优先级以 [docs/EXPERIMENT_E_MAP.md](docs/EXPERIMENT_E_MAP.md) 为准；长期边界见 [PROJECT_PLAN.md](PROJECT_PLAN.md)。结构见 [docs/STRUCTURE.md](docs/STRUCTURE.md)。
+当前执行优先级以 [docs/project/EXPERIMENT_E_MAP.md](docs/project/EXPERIMENT_E_MAP.md) 为准；长期边界见 [PROJECT_PLAN.md](PROJECT_PLAN.md)。结构见 [docs/project/STRUCTURE.md](docs/project/STRUCTURE.md)。
 
 **计划语言**：Cursor Plan / 实验方案正文与 todos 用**中文**（路径与 E 号可英文）；见 `.cursor/rules/plans-chinese.mdc`。
 
@@ -30,7 +30,7 @@ python experiments/run_autonomous_search.py --config archive/configs_legacy/mnis
 
 ## GPU
 
-`python scripts/check_gpu.py --device cuda:0`。旧 GPU 交接见 `archive/docs/GPU_WORKFLOW.md`。
+`python scripts/check_gpu.py --device cuda:0`。旧 GPU 交接见 `archive/archive/docs/GPU_WORKFLOW.md`。
 
 ## 验证顺序
 
@@ -39,5 +39,5 @@ python experiments/run_autonomous_search.py --config archive/configs_legacy/mnis
 
 ## 导师交付与问题上报
 
-- 交付入口：[docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md)；E 进度链到各 `e{n}_report.md`。
+- 交付入口：[docs/project/MENTOR_DELIVERY.md](docs/project/MENTOR_DELIVERY.md)；E 进度链到各 `e{n}_report.md`。
 - P0 当轮聊天明确说；P1 记 WORK_LOG / MENTOR 已知问题。

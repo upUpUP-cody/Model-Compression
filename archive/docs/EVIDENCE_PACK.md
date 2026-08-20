@@ -1,9 +1,9 @@
 # 证据包（已归档 · 原 Phase H 记号）
 
-> **注意**：本文件已迁入 `archive/docs/`。实验主编号以 PDF **E0–E14** 为准（见 `docs/EXPERIMENT_E_MAP.md` / `docs/WORK_LOG.md`）。下文仅保留 CIFAR/MNIST 历史详表。
+> **注意**：本文件已迁入 `archive/docs/`。实验主编号以 PDF **E0–E14** 为准（见 `docs/project/EXPERIMENT_E_MAP.md` / `docs/project/WORK_LOG.md`）。下文仅保留 CIFAR/MNIST 历史详表。
 >
 > 用途：论文 / 答辩 / 交接时的证据索引与叙事提纲（历史）。
-> 现行日志：[../../docs/WORK_LOG.md](../../docs/WORK_LOG.md) · 精简：[../../docs/WORK_LOG_BRIEF.md](../../docs/WORK_LOG_BRIEF.md)
+> 现行日志：[../../docs/project/WORK_LOG.md](../../docs/project/WORK_LOG.md) · 精简：[../../docs/project/WORK_LOG_BRIEF.md](../../docs/project/WORK_LOG_BRIEF.md)
 > 日期：2026-08-14（更新：2026-08-15）· 主机：RTX 4090 · 含 20 epoch smoke 与 100 epoch 正式基线
 
 ---
@@ -308,7 +308,7 @@ Test（摘录，search vs iterative）：
 | 恢复消融（多 seed） | `results/cifar_recovery_ablation_multiseed/` |
 | MNIST P1.2 sweep | `results/p12_comparison_gpu_sweep/` |
 | 20 epoch / 100 epoch 基线 | `checkpoints/cifar_resnet18_baseline.pth`、`checkpoints/cifar_resnet18_baseline_formal100.pth` |
-| 过程日志 / 欠压分析 | `docs/WORK_LOG.md`、`docs/CIFAR_SEARCH_UNDERCOMPRESSION.md` |
+| 过程日志 / 欠压分析 | `docs/project/WORK_LOG.md`、`docs/CIFAR_SEARCH_UNDERCOMPRESSION.md` |
 | **论文成果提纲** | `docs/PAPER_RESULTS_OUTLINE.md` |
 
 **复现命令指针（不新开长实验）**

@@ -9,15 +9,15 @@
 
 | E | 状态 | 报告 |
 |---|------|------|
-| E0 Dense baseline | done_proxy (1.5B) | [e_reports/E0](e_reports/E0_dense_baseline.md) · `/mnt/data2/results/E0_dense_baseline/` |
-| E1 One-shot curve | done_proxy | [e_reports/E1](e_reports/E1_oneshot_sparsity_curve.md) |
-| E2 Iterative vs one-shot | done_proxy | [e_reports/E2](e_reports/E2_iterative_vs_oneshot.md) |
-| E3 Compression Gap | done_proxy | [e_reports/E3](e_reports/E3_compression_gap.md) |
+| E0 Dense baseline | done_proxy (1.5B) | [../results/E0](../results/E0_dense_baseline.md) · `/mnt/data2/results/E0_dense_baseline/` |
+| E1 One-shot curve | done_proxy | [../results/E1](../results/E1_oneshot_sparsity_curve.md) |
+| E2 Iterative vs one-shot | done_proxy | [../results/E2](../results/E2_iterative_vs_oneshot.md) |
+| E3 Compression Gap | done_proxy | [../results/E3](../results/E3_compression_gap.md) |
 | E4–E7 | pending | Stage B（Gate A 后） |
-| E8–E9 | pending | 第一批后半 |
+| E8–E9 | partial_smoke / pending | [process/NEXT_E8_E9](../process/NEXT_E8_E9.md) · [results/E8](../results/E8_random_recovery.md) |
 | E10–E14 | pending | E13 **不插队** |
 
-第一批（§34）：E0–E3 已跑 proxy；下一步 **E8→E9**。Gate A 本 proxy 暂不可判。
+第一批（§34）：E0–E3 已跑 proxy；E8 冒烟 cell 已落盘；续跑见 [`../process/NEXT_E8_E9.md`](../process/NEXT_E8_E9.md)。Gate A 本 proxy 暂不可判。
 
 ---
 
@@ -117,7 +117,7 @@
 
 | 内容 | 路径 |
 |------|------|
-| E0–E3 | `/mnt/data2/results/E{0-3}_*/` · `docs/e_reports/` |
+| E0–E3 | `/mnt/data2/results/E{0-3}_*/` · `docs/results/` |
 | CIFAR formal100 | `results/cifar_p12_comparison_gpu_formal100_full/` |
 | GLUE | `/mnt/data2/results/qwen_glue_kg6/` |
 | SQuAD LoRA formal | `/mnt/data2/results/qwen_k6_lora_formal/` |

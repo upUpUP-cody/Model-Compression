@@ -30,7 +30,7 @@ python scripts/check_gpu.py --device cuda:0 --precision fp16
 
 `requirements-gpu.txt` records the required installation sequence but does not pin a wheel index because the correct index depends on the target driver.
 
-See [docs/GPU_WORKFLOW.md](docs/GPU_WORKFLOW.md) for the required smoke, frozen report-test, and formal-study sequence. Do not run a GPU config on CPU as a fallback.
+See [archive/docs/GPU_WORKFLOW.md](archive/docs/GPU_WORKFLOW.md) for the required smoke, frozen report-test, and formal-study sequence. Do not run a GPU config on CPU as a fallback.
 
 ## Core constraints
 

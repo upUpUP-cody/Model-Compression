@@ -1,6 +1,6 @@
 # Autonomous Lottery Ticket Discovery - 项目实施计划
 
-> 本文件是长期路线图。**实验编号唯一标准**：[`docs/refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf`](docs/refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf) §31（E0–E14）。执行表：[docs/EXPERIMENT_E_MAP.md](docs/EXPERIMENT_E_MAP.md)。日志按 E：[docs/WORK_LOG.md](docs/WORK_LOG.md)。交付：[docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md)。
+> 本文件是长期路线图。**实验编号唯一标准**：[`docs/refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf`](docs/refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf) §31（E0–E14）。执行表：[docs/project/EXPERIMENT_E_MAP.md](docs/project/EXPERIMENT_E_MAP.md)。日志按 E：[docs/project/WORK_LOG.md](docs/project/WORK_LOG.md)。交付：[docs/project/MENTOR_DELIVERY.md](docs/project/MENTOR_DELIVERY.md)。
 >
 > **更新状态（2026-08-20）**
 >
@@ -599,7 +599,7 @@ search:
 
 ## 纲领实验框架（E0–E14 · 取代旧 Phase*）
 
-唯一标准见 [docs/EXPERIMENT_E_MAP.md](docs/EXPERIMENT_E_MAP.md) 与 [docs/PDF_E_REQUIREMENTS_31_34.md](docs/PDF_E_REQUIREMENTS_31_34.md)。工作日志按 E：[docs/WORK_LOG.md](docs/WORK_LOG.md)。
+唯一标准见 [docs/project/EXPERIMENT_E_MAP.md](docs/project/EXPERIMENT_E_MAP.md) 与 [docs/project/PDF_E_REQUIREMENTS_31_34.md](docs/project/PDF_E_REQUIREMENTS_31_34.md)。工作日志按 E：[docs/project/WORK_LOG.md](docs/project/WORK_LOG.md)。
 
 ```mermaid
 flowchart TD
@@ -630,4 +630,4 @@ Non-E（CIFAR / GLUE / SQuAD）数字见 WORK_LOG Non-E 与 MENTOR_DELIVERY；�
 4. Gate 后再 Stage B / D；不启动 E13
 5. 主文是否只押 CIFAR（Non-E）仍待拍板
 
-执行与结论以 [docs/EXPERIMENT_E_MAP.md](docs/EXPERIMENT_E_MAP.md) / [docs/WORK_LOG.md](docs/WORK_LOG.md) / [docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md) 为准。旧 Phase* / EXECUTION_PLAN 仅在 `archive/`。
+执行与结论以 [docs/project/EXPERIMENT_E_MAP.md](docs/project/EXPERIMENT_E_MAP.md) / [docs/project/WORK_LOG.md](docs/project/WORK_LOG.md) / [docs/project/MENTOR_DELIVERY.md](docs/project/MENTOR_DELIVERY.md) 为准。旧 Phase* / EXECUTION_PLAN 仅在 `archive/`。

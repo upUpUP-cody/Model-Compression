@@ -176,9 +176,9 @@ dmypy.json
 .pyre/
 
 # Project-generated experiment artifacts
-results/
+/results/
 gpu_send/
-checkpoints/
+/checkpoints/
 *.pth
 .claude/worktrees/
 

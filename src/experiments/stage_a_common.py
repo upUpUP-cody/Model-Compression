@@ -35,7 +35,7 @@ def write_report(path: Path, text: str) -> None:
 
 
 def mirror_docs_report(experiment_id: str, slug: str, report_text: str) -> Path:
-    docs = Path("docs/e_reports")
+    docs = Path("docs/results")
     ensure_dir(docs)
     out = docs / f"{experiment_id}_{slug}.md"
     write_report(out, report_text)
