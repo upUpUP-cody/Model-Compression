@@ -17,6 +17,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.experiments.qwen_glue_comparison import METHOD_NAMES, count_params, results_to_records, run_method
+from src.utils.compression_clarity import (
+    SUMMARY_NOTE_DENSE_BASELINE,
+    compression_clarity_fields,
+    format_method_ok_line,
+)
 from src.utils.glue_protocol import SUPPORTED_GLUE_TASKS, assert_test_not_in_selection_path
 from src.utils.qwen_glue_eval import load_qwen_for_eval, prepare_glue_from_config, write_json
 from src.utils.qwen_glue_train_data import build_glue_lm_loaders
@@ -169,24 +174,41 @@ def main() -> None:
                     baseline_parameter_count=baseline_params,
                 )
                 out_path = cell_dir / f"{method}_metrics.json"
+                clarity = compression_clarity_fields(
+                    method, float(target), float(result.compression_ratio)
+                )
                 payload = {
                     "run_label": cell_config.get("run_label"),
-                    "claim": "KG.5 GLUE three-task small scan; informal gate only; not paper main table",
+                    "claim": str(
+                        cell_config.get(
+                            "claim",
+                            "KG.5 GLUE three-task small scan; informal gate only; not paper main table",
+                        )
+                    ),
                     "eval_strategy": "prompt_verbalizer",
                     "task": task,
                     "target_compression_ratio": float(target),
+                    **clarity,
                     "split_metadata": splits.metadata(),
                     "result": results_to_records([result])[0],
                 }
                 write_json(out_path, payload)
                 print(
-                    f"[OK] {task} {target}x {method}: compression={result.compression_ratio:.3f}x "
-                    f"ce={result.val_loss:.4f} acc={result.accuracy} -> {out_path}"
+                    format_method_ok_line(
+                        method=method,
+                        cell_target=float(target),
+                        actual_compression=float(result.compression_ratio),
+                        metric_parts=(
+                            f"ce={result.val_loss:.4f} acc={result.accuracy} -> {out_path}"
+                        ),
+                        prefix=f"{task} ",
+                    )
                 )
                 summary_rows.append(
                     {
                         "task": task,
                         "target_compression_ratio": float(target),
+                        **clarity,
                         "method": method,
                         "compression_ratio": result.compression_ratio,
                         "accuracy": result.accuracy,
@@ -210,13 +232,16 @@ def main() -> None:
         "compression_targets": targets,
         "methods": methods,
         "eval_strategy": "prompt_verbalizer",
+        "oneshot_recovery": bool(config.get("comparison", {}).get("oneshot_recovery", False)),
         "rows": summary_rows,
         "note": (
             "selection uses carved validation only; official validation is frozen test; "
-            "informal KG.5 gate — do not claim search superiority"
+            "do not claim search superiority; "
+            + SUMMARY_NOTE_DENSE_BASELINE
         ),
     }
-    summary_path = output_root / "kg5_summary.json"
+    summary_name = str(config.get("logging", {}).get("summary_filename") or "kg5_summary.json")
+    summary_path = output_root / summary_name
     write_json(summary_path, summary)
     print(f"[OK] summary -> {summary_path}")
 

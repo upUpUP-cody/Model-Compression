@@ -17,7 +17,17 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.experiments.qwen_k5_comparison import METHOD_NAMES, count_params, results_to_records, run_method
-from src.utils.qwen_squad_eval import load_qwen_for_eval, prepare_squad_from_config, write_json
+from src.utils.compression_clarity import (
+    SUMMARY_NOTE_DENSE_BASELINE,
+    compression_clarity_fields,
+    format_method_ok_line,
+)
+from src.utils.qwen_squad_eval import (
+    evaluate_squad_split,
+    load_qwen_for_eval,
+    prepare_squad_from_config,
+    write_json,
+)
 from src.utils.qwen_train_data import build_squad_lm_loaders
 from src.utils.squad_protocol import assert_test_not_in_selection_path
 
@@ -144,26 +154,81 @@ def main() -> None:
                 cell_config,
                 baseline_parameter_count=baseline_params,
             )
+            frozen_metrics = None
+            if bool(cell_config.get("comparison", {}).get("run_frozen_test", False)):
+                frozen_cap = cell_config["dataset"].get(
+                    "frozen_test_max_samples",
+                    cell_config["dataset"].get("eval_max_samples"),
+                )
+                frozen_metrics = evaluate_squad_split(
+                    model,
+                    tokenizer,
+                    splits.test,
+                    device=device,
+                    batch_size=int(cell_config["hardware"].get("batch_size", 1)),
+                    max_seq_len=int(cell_config["dataset"].get("max_seq_len", 384)),
+                    max_new_tokens=int(cell_config["model"].get("max_new_tokens", 32)),
+                    max_samples=frozen_cap,
+                    split_name="frozen_report",
+                    allow_frozen_test=True,
+                )
+                frozen_path = cell_dir / f"{method}_frozen_test.json"
+                clarity = compression_clarity_fields(
+                    method, float(target), float(result.compression_ratio)
+                )
+                write_json(
+                    frozen_path,
+                    {
+                        "run_label": cell_config.get("run_label"),
+                        "task": "squad_v2",
+                        "target_compression_ratio": float(target),
+                        **clarity,
+                        "method": method,
+                        "split": "official_validation_frozen_once",
+                        "metrics": frozen_metrics,
+                    },
+                )
+                print(
+                    f"[OK] frozen test {target}x {method}: "
+                    f"f1={frozen_metrics.get('f1')} em={frozen_metrics.get('exact_match')} "
+                    f"n={frozen_metrics.get('n_examples')} -> {frozen_path}"
+                )
             out_path = cell_dir / f"{method}_metrics.json"
+            clarity = compression_clarity_fields(
+                method, float(target), float(result.compression_ratio)
+            )
             payload = {
                 "run_label": cell_config.get("run_label"),
-                "claim": (
-                    "K6 SQuAD small matrix; informal until frozen-test once; "
-                    "do not claim search superiority on LLM"
+                "claim": str(
+                    cell_config.get(
+                        "claim",
+                        "K6 SQuAD small matrix; informal until frozen-test once; "
+                        "do not claim search superiority on LLM",
+                    )
                 ),
                 "task": "squad_v2",
                 "target_compression_ratio": float(target),
+                **clarity,
                 "split_metadata": splits.metadata(),
                 "result": results_to_records([result])[0],
+                "frozen_test": frozen_metrics,
             }
             write_json(out_path, payload)
             print(
-                f"[OK] {target}x {method}: compression={result.compression_ratio:.3f}x "
-                f"ce={result.val_loss:.4f} f1={result.f1} em={result.exact_match} -> {out_path}"
+                format_method_ok_line(
+                    method=method,
+                    cell_target=float(target),
+                    actual_compression=float(result.compression_ratio),
+                    metric_parts=(
+                        f"ce={result.val_loss:.4f} f1={result.f1} "
+                        f"em={result.exact_match} -> {out_path}"
+                    ),
+                )
             )
             summary_rows.append(
                 {
                     "target_compression_ratio": float(target),
+                    **clarity,
                     "method": method,
                     "compression_ratio": result.compression_ratio,
                     "f1": result.f1,
@@ -171,6 +236,10 @@ def main() -> None:
                     "val_loss": result.val_loss,
                     "elapsed_sec": result.elapsed_sec,
                     "metrics_path": str(out_path),
+                    "frozen_test_f1": None if frozen_metrics is None else frozen_metrics.get("f1"),
+                    "frozen_test_em": None
+                    if frozen_metrics is None
+                    else frozen_metrics.get("exact_match"),
                 }
             )
             if torch.cuda.is_available():
@@ -188,10 +257,13 @@ def main() -> None:
         "rows": summary_rows,
         "note": (
             "selection uses carved validation only; official validation is frozen test; "
-            "iterative budgets are cumulative vs dense; informal K6 gate/matrix"
+            "iterative budgets are cumulative vs dense; search is single-candidate; "
+            + SUMMARY_NOTE_DENSE_BASELINE
         ),
+        "run_frozen_test": bool(config.get("comparison", {}).get("run_frozen_test", False)),
     }
-    summary_path = output_root / "k6_summary.json"
+    summary_name = str(config.get("logging", {}).get("summary_filename") or "k6_summary.json")
+    summary_path = output_root / summary_name
     write_json(summary_path, summary)
     print(f"[OK] summary -> {summary_path}")
 

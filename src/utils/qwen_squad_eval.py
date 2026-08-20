@@ -161,8 +161,10 @@ def evaluate_squad_split(
     max_new_tokens: int,
     max_samples: Optional[int] = None,
     split_name: str = "validation",
+    allow_frozen_test: bool = False,
 ) -> Dict[str, float]:
-    assert_test_not_in_selection_path([split_name])
+    if not allow_frozen_test:
+        assert_test_not_in_selection_path([split_name])
     dataset = SquadPromptDataset(examples, tokenizer=tokenizer, max_samples=max_samples)
     loader = DataLoader(dataset, batch_size=int(batch_size), shuffle=False, collate_fn=_collate)
     predictions: Dict[str, str] = {}

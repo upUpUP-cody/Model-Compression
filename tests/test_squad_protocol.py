@@ -51,3 +51,38 @@ def test_selection_path_excludes_test():
 def test_assert_blocks_test_on_selection_path():
     with pytest.raises(ValueError, match="frozen test"):
         assert_test_not_in_selection_path(["train", "test"])
+
+
+def test_evaluate_squad_split_blocks_test_name_without_flag():
+    from src.utils.qwen_squad_eval import evaluate_squad_split
+
+    with pytest.raises(ValueError, match="frozen test"):
+        evaluate_squad_split(
+            None,
+            None,
+            [],
+            device="cpu",
+            batch_size=1,
+            max_seq_len=8,
+            max_new_tokens=1,
+            split_name="test",
+        )
+
+
+def test_evaluate_squad_split_frozen_flag_accepts_empty_test():
+    from src.utils.qwen_squad_eval import evaluate_squad_split
+
+    metrics = evaluate_squad_split(
+        None,
+        None,
+        [],
+        device="cpu",
+        batch_size=1,
+        max_seq_len=8,
+        max_new_tokens=1,
+        split_name="frozen_report",
+        allow_frozen_test=True,
+        max_samples=0,
+    )
+    assert metrics["n_examples"] == 0.0
+    assert metrics["split"] == "frozen_report"

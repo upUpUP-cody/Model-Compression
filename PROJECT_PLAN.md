@@ -2,22 +2,42 @@
 
 > 本文件是项目的完整长期路线图、阶段目标和全局成功标准。当前 P0/P1/P2 的执行顺序、研究协议和阶段验收条件见 [EXECUTION_PLAN.md](EXECUTION_PLAN.md)。详细实验结论见 [docs/WORK_LOG.md](docs/WORK_LOG.md) / [docs/WORK_LOG_BRIEF.md](docs/WORK_LOG_BRIEF.md)。
 >
-> **更新状态（2026-08-16）**
+> **更新状态（2026-08-20）**
 >
-> - **已完成**：MVP；MNIST / CIFAR P1.2；formal100 主表与 crossover 机制；Phase K0–K5 **SQuAD 管线冒烟**；KG.0–KG.5 **GLUE**；K6 预算对齐 + **LoRA@1.5x Informal**。
-> - **当前优先**：论文收口 — CIFAR 主叙事 + GLUE 过渡；SQuAD = **弱恢复负对照 + LoRA Informal 附录**（非 LLM 主表；不扩 2x）。见 [docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)。
-> - **不默认**：重跑 CIFAR formal100；宣称 search 系统全面更优；把 n=64 Informal 当正式主表。
+> - **已完成**：MVP；MNIST / CIFAR P1.2；formal100 主表与 crossover 机制；Phase K0–K5 **SQuAD 管线**；KG.0–KG.6 **GLUE**；K6 预算对齐 + **LoRA Informal + LoRA formal**。
+> - **当前优先**：（1）**RQ4 必做** — Self vs External controller / Self-Governance（优先 GLUE 冒烟）；（2）论文口径收口 — CIFAR regime-dependent 主叙事 + KG.6/SQuAD 附录（主文范围仍待拍板）。见下方「相对研究纲领的口径」与 [docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md) · 交付页 [docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md)。
+> - **导师锁定（2026-08-20 更新）**：SQuAD **前先 GLUE**；SQuAD 难压属预期；**RQ4 必做**；**RQ3 排在 RQ4 之后**（不插队、非取消）。
+> - **不默认**：重跑 CIFAR formal100；宣称 search 系统全面更优；把 Informal/formal 升格 LLM 主表；在 RQ4 完成前插队做 E9。
 > - **主机**：1×RTX 4090（默认单卡；仅 Agent 判定需双卡拆任务时再加第 2 卡）；权重/数据 `/mnt/data`；LLM 运行产物 `/mnt/data2`。
 > - **资源告警**：加卡 / 配置优化触发标准见 [CLAUDE.md](CLAUDE.md)「LLM / GPU 与配置优化告知」。
 
 ## 项目概述
 
-本项目旨在复现和实现《Autonomous Lottery Ticket Discovery》论文中提出的自主彩票发现方法，该方法能够在不依赖预训练父网络的情况下，自主发现高性能的稀疏神经网络子结构。
+本项目旨在实现《Autonomous Lottery Ticket Discovery》方向的自主压缩搜索：物理结构化剪枝 + 可审计搜索 + 恢复，并在严格 train/val/test 协议下对照人工设计路径。
 
-当前研究叙事已从「先跑通 MNIST MLP」推进到「同一 train/val/test 协议迁移到 CIFAR ResNet」；自主搜索相对 one-shot / 迭代剪枝的价值，必须在 **同压缩预算** 下解读（见 WORK_LOG §2.8）。
+**当前可投稿主证据**在视觉域：CIFAR-10 ResNet-18 上，同压缩预算下 search vs iterative 呈 **regime-dependent**（见 WORK_LOG / EVIDENCE_PACK）。LLM 侧已完成 GLUE→SQuAD 过渡；下一 LLM 科学目标按导师拍板：**先做 RQ4（Child 接任 Controller）**，**再做 RQ3（High-Gap / E9）**。
+
+### 相对研究纲领的口径（PDF + 导师，2026-08-20）
+
+对照仓库内两份纲领 PDF（研究动机 / 实验执行表 E0–E14）与导师口头优先级：
+
+| RQ / 主题 | 纲领原意 | 导师 / 本仓库口径 | 状态 |
+|-----------|----------|-------------------|------|
+| 任务顺序 | 可直接上 LLM 主基准 | **先 GLUE、后 SQuAD** | `[√]` 已执行且符合导师 |
+| SQuAD | 生成式主标准 | **难压属预期**；Informal/formal 附录，不扛 LLM 主表 | `[√]` 证据已有 |
+| RQ1 / Stage B | Compressibility Frontier / adaptive vs fixed | CIFAR **同预算 crossover** 作主文；LLM 仅过渡 | 视觉 `[√]` |
+| RQ2 | 损伤有结构 | GLUE/SQuAD 掉点差异作弱证据 | 部分 |
+| **RQ4** | Child 接任 Controller；Self vs External（E12–E13→E14） | **必做 · 下一档** | **未做 = 主缺口** |
+| **RQ3** | Parent 产 High-Gap / Synthetic Frontier（E9–E11） | **RQ4 之后做**（不插队） | **排队** |
+
+**近端路径（锁定）**：
+
+1. **下一实验档（必做）**：RQ4 最小矩阵（External controller=始终 M0 vs Self=当前 accepted Mt）；优先在 **1.5B + GLUE** 冒烟（SQuAD 已证明难压）。
+2. **RQ3 / E9**：仅 RQ4 有结论后再排；不插队。
+3. **投稿收口**：主文押 CIFAR（主文范围仍待拍板）；GLUE 过渡；SQuAD = 难压局限；不升格 LLM regime 主复现。
+4. **不做（默认）**：跳过 Gate 直接 E14 全自主多代；把「优于 Wanda 10%」当本期必达；RQ4 完成前插队 E9。
 
 ---
-
 ## 阶段划分与实施步骤
 
 ### **阶段 0: 环境搭建与基础设施 (预计 3-5 天)**
@@ -563,17 +583,19 @@ search:
 - [√] crossover 机制消融（10x=`path_and_gate`；8x=`gate_dominant`；4x=`inconclusive_close`）
 - [×] 证明 search **系统全面**优于 iterative — **当前证据不支持**（应为 regime-dependent）
 
-### 目标标准 (论文 LLM 复现)
-- [√] 先在 **GLUE 正式标准（SST-2 + RTE + QNLI）** 上给出同预算压缩对照信号（Phase K §KG.5；短文本闭集 NLU）
-- [ ] 再在 **SQuAD** 上达到可报告的 F1/EM（**LoRA Informal@1.5x 已可读**；正式主表 / frozen test 仍延后）
-- [ ] 优于 One-shot Wanda baseline 至少 10%（同协议对齐后）
-- [ ] 优于传统 IMP / 人工设计 iterative 至少 5%（同压缩预算）
+### 目标标准 (论文 LLM 复现 / 过渡)
 
-### 优秀标准 (超越论文)
-- [ ] 在论文未测试的数据集上验证
-- [ ] 提出改进的控制器策略
-- [ ] 支持 3 种以上模型架构
-- [ ] 搜索时间优化 50% 以上
+- [√] 先在 **GLUE 正式标准（SST-2 + RTE + QNLI）** 上给出同预算压缩对照信号（**KG.6**；导师：SQuAD 前先 GLUE）
+- [√] 再在 **SQuAD** 上给出可报告信号（LoRA formal；**难压属预期**；附录；禁止「剪枝优于 dense」）
+- [ ] **RQ4 最小矩阵（必做）**：External vs Self controller（优先 GLUE 冒烟；对应纲领 E12–E13）
+- [ ] **RQ3** High-Gap / Synthetic Frontier（E9–E11）— **排在 RQ4 之后**（不插队、非取消）
+- [ ] （非本期必达）同协议下相对外部 Wanda/IMP 的固定百分比优势 — 与 regime-dependent 叙事冲突时以 crossover 为准
+
+### 优秀标准 (超越当期)
+
+- [ ] E14 多代 lineage 全自主（仅当 RQ4 有信号后）
+- [ ] 在更多数据集 / 更大模型上验证 Self-Governance Frontier
+- [ ] 搜索时间与审计成本优化
 
 ---
 
@@ -643,26 +665,27 @@ flowchart TD
 - **磁盘**：实现前须先提醒用户扩盘（Qwen 权重/缓存/多次 run 通常还需 **30G+** 空闲）
 - 本阶段只写接口草图与实验矩阵，**不实现** Transformer 剪枝 / SQuAD pipeline；**不下载**权重
 
-### Phase K — LLM 实现（KG.5/K6/SGD 负对照/LoRA Informal/lit `[√]`；下一档 = 论文口径收口）
+### Phase K — LLM 实现（过渡 `[√]`；下一档 = RQ4）
 
-- 执行计划：[docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)（**§1.1 任务区分**）
+- 执行计划：[docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)（**§1.1 任务区分**；**§RQ 优先级**）
 - 模型锁定：`Qwen2.5-1.5B-Instruct`；大文件：`/mnt/data`（结果：`/mnt/data2`）
-- [√] K0–K5 管线；KG.5 GLUE 门禁；K6 预算对齐小扫
-- [√] **加深 SGD 1.5x**：F1≈0 → 负对照（`qwen_k6_recover_1p5x`）
-- [√] **LoRA Informal 1.5x**：四方法可读；本格 iterative ≥ oneshot ≈ search（`qwen_k6_recover_lora_1p5x*`）
-- [√] K6-lit 短表：[`docs/K6_LIT_BASELINE_SHORTLIST.md`](docs/K6_LIT_BASELINE_SHORTLIST.md)
-- [ ] 论文口径收口 / frozen test（延后）；**不扩 2x**；**不预设** search 全面更优
+- [√] K0–K5 管线；KG.5 门禁；**KG.6 预算对齐 GLUE**（导师：SQuAD 前先 GLUE）
+- [√] K6 小扫 + SGD 负对照 + LoRA Informal/formal（SQuAD **难压属预期**；附录）
+- [√] K6-lit 短表
+- [ ] **RQ4（必做）**：External vs Self controller 最小矩阵（优先 GLUE；E12–E13）
+- [ ] **RQ3**：E9–E11 — 仅 RQ4 之后
+- [ ] 论文口径收口；不升格 LLM 主表；不预设 search 全面更优
 
 ---
 
 ## 下一步行动
 
 1. [√] formal100 全表 + 机制链；叙事定稿为 **regime-dependent**；「系统全面更优」仍 `[×]`
-2. [√] 预算对齐、一步复验与 4x 诊断（一步策略收窄为 `target<=2`）
-3. [√] Phase J 规划：[`docs/PHASE_J_QWEN_PLAN.md`](docs/PHASE_J_QWEN_PLAN.md)
-4. [√] 论文成果提纲：[`docs/PAPER_RESULTS_OUTLINE.md`](docs/PAPER_RESULTS_OUTLINE.md)
-5. [√] Phase K SQuAD 管线冒烟：[`docs/PHASE_K_QWEN_PLAN.md`](docs/PHASE_K_QWEN_PLAN.md)（K0–K5）
-6. [√] KG.0–KG.5 GLUE；K6 小扫 + SGD 负对照 + LoRA Informal
-7. **之后**：论文口径收口（Informal 附录）；不默认扩 2x / 不重跑 formal100
+2. [√] 预算对齐、一步复验与 4x 诊断
+3. [√] Phase J / PAPER_RESULTS_OUTLINE / Phase K 过渡（GLUE→SQuAD）
+4. [√] K6 LoRA formal
+5. **下一实验档（必做）**：**RQ4**（Self-Governance / External vs Self）；优先 GLUE 冒烟
+6. **其后**：**RQ3** High-Gap / E9（不插队）
+7. **并行**：论文口径收口（主文范围仍待拍板）
 
-执行顺序与验收细节仍以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 为准；实验结论以 WORK_LOG 为准；写论文以 PAPER_RESULTS_OUTLINE 为准；LLM 以 PHASE_K_QWEN_PLAN 为准。
+执行顺序与验收细节仍以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 为准；实验结论以 WORK_LOG 为准；写论文以 PAPER_RESULTS_OUTLINE 为准；LLM 以 PHASE_K_QWEN_PLAN 为准；交付表以 [docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md) 为准。

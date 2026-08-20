@@ -19,7 +19,12 @@ from src.experiments.qwen_k5_comparison import (
     ratios_for_stage_target,
 )
 from src.pruning.pruning_backend import resolve_pruning_backend
-from src.recovery.qwen_lm_recovery import QwenLmCheapCritic, evaluate_lm_loss, quick_lm_recovery
+from src.recovery.qwen_lm_recovery import (
+    QwenLmCheapCritic,
+    evaluate_lm_loss,
+    quick_lm_recovery,
+    run_configured_recovery,
+)
 from src.utils.device import resolve_device
 from src.utils.glue_protocol import assert_test_not_in_selection_path
 from src.utils.qwen_glue_eval import evaluate_glue_split
@@ -80,7 +85,9 @@ def run_method(
         model = source_model
         details["applied"] = False
     elif method == "oneshot":
-        model, details = _oneshot(source_model, config, device)
+        model, details = _oneshot(
+            source_model, config, device, train_loader, validation_loader
+        )
     elif method == "iterative_level1":
         model, details = _iterative(source_model, train_loader, validation_loader, config, device)
     else:
@@ -110,7 +117,13 @@ def run_method(
     return result, model
 
 
-def _oneshot(source_model: nn.Module, config: Mapping[str, Any], device: str) -> Tuple[nn.Module, Dict[str, Any]]:
+def _oneshot(
+    source_model: nn.Module,
+    config: Mapping[str, Any],
+    device: str,
+    train_loader: Optional[DataLoader] = None,
+    validation_loader: Optional[DataLoader] = None,
+) -> Tuple[nn.Module, Dict[str, Any]]:
     # Prefer target-aligned ratios (KG.5/K6); fall back to fixed oneshot_mlp_ratio for smoke.
     target = float(config.get("comparison", {}).get("target_compression_ratio") or 0.0)
     backend = resolve_pruning_backend(source_model, "qwen")
@@ -129,7 +142,7 @@ def _oneshot(source_model: nn.Module, config: Mapping[str, Any], device: str) ->
     before = dense_count
     model = backend.create_pruned_model(ratios).to(resolve_device(device))
     after = count_params(model)
-    return model, {
+    details: Dict[str, Any] = {
         "applied": True,
         "param_before": before,
         "param_after": after,
@@ -141,6 +154,33 @@ def _oneshot(source_model: nn.Module, config: Mapping[str, Any], device: str) ->
         "importance_method": "magnitude",
         "recovery": "none",
     }
+    apply_recovery = bool(config.get("comparison", {}).get("oneshot_recovery", False))
+    if apply_recovery:
+        if train_loader is None or validation_loader is None:
+            raise ValueError("oneshot_recovery requires train_loader and validation_loader")
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        recovery_epochs = int(
+            config.get("comparison", {}).get(
+                "oneshot_recovery_epochs",
+                config.get("recovery", {}).get("epochs", 1),
+            )
+        )
+        model, history = run_configured_recovery(
+            model,
+            train_loader,
+            validation_loader,
+            config,
+            epochs=recovery_epochs,
+            copy_model=False,
+            verbose=False,
+        )
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        details["recovery"] = history
+        details["param_after_recovery"] = count_params(model)
+        details["compression_vs_dense"] = float(dense_count) / max(count_params(model), 1)
+    return model, details
 
 
 def _iterative(

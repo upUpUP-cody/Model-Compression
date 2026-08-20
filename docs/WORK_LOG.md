@@ -624,13 +624,21 @@ dense_baseline test **90.36%**。oneshot 在 ≥4x 仍崩溃（负结果保留�
     - **明确不说明**：不得写成论文 LLM 主结论或「search 系统全面更优」；不得替代 SQuAD F1/EM 主证据
 12. [√] **K6 预算对齐 + SQuAD 小矩阵（2026-08-16）**：产物 `/mnt/data2/results/qwen_k6/`（~49 min；`k6_summary.json`）
     - 代码：`ratios_for_stage_target(..., baseline_parameter_count=dense)`；chat template 进 SQuAD eval/pack；`experiments/run_qwen_k6.py` / `configs/qwen_k6.yaml`
-    - 数字表（carved val n=16；非正式）：
+    - 数字表（carved val n=16；非正式）。**dense 为未剪枝基线（实测 1.00x），勿与 cell_target 混读**：
 
-| 目标 | dense F1 | oneshot F1 | iterative F1 | search F1 | 实测压缩（o/i/s） |
-|------|----------|------------|--------------|-----------|-------------------|
-| 1.5x | 30.6 | 1.0 | 0.0 | 0.0 | 1.50 / 1.50 / 1.50 |
-| 2.0x | 30.6 | 0.0 | 0.0 | 0.0 | 2.00 / 2.00 / 2.00 |
-| 4.0x | 30.6 | 6.3 | 0.0 | 0.0 | 3.07 / 3.62 / 3.07 |
+**Baseline（no prune）**
+
+| method | actual | F1 |
+|--------|--------|-----|
+| dense | 1.00x | 30.6 |
+
+**At cell_target（短 SGD 恢复；实测压缩 o/i/s）**
+
+| cell | oneshot | iterative | search | actual o/i/s |
+|------|---------|-----------|--------|--------------|
+| 1.5x | 1.0 | 0.0 | 0.0 | 1.50 / 1.50 / 1.50 |
+| 2.0x | 0.0 | 0.0 | 0.0 | 2.00 / 2.00 / 2.00 |
+| 4.0x | 6.3 | 0.0 | 0.0 | 3.07 / 3.62 / 3.07 |
 
     - **K6 结论（说明了什么）**：
       1. **预算对齐成功**：1.5x/2.0x 不再叠乘超剪（对比 KG.5 的 ~1.88/~2.81）
@@ -658,43 +666,102 @@ dense_baseline test **90.36%**。oneshot 在 ≥4x 仍崩溃（负结果保留�
     - 说明：失败主因是恢复配方/预算，不是评测或压缩预算；oneshot F1>dense 属小样本噪声+任务适配，不宣称「剪枝更强」
 16. [√] **K6 R1-pass 方法扩展（2026-08-16）**：`configs/qwen_k6_recover_lora_1p5x_methods.yaml` → `/mnt/data2/results/qwen_k6_recover_lora_1p5x_methods/`（~2.7h；仍单卡）
     - iterative ~109 min；search ~55 min；预算均 **1.50x**
-    - **Informal 1.5x 四方法合并表**（R1 + methods；n=64；非正式）：
+    - **Informal 1.5x 对照表**（R1 + methods；n=64；非正式）。**dense 单独一行基线**：
 
-| 方法 | 压缩 | F1 | EM | CE |
-|------|------|-----|-----|-----|
+**Baseline（no prune）**
+
+| method | actual | F1 | EM | CE |
+|--------|--------|-----|-----|-----|
 | dense | 1.00x | 25.5 | 3.1 | 1.90 |
+
+**At cell_target=1.5x（prune+LoRA；实测 ~1.50x）**
+
+| method | actual | F1 | EM | CE |
+|--------|--------|-----|-----|-----|
 | oneshot+LoRA | 1.50x | 30.6 | 23.4 | 0.84 |
 | iterative_level1+LoRA | 1.50x | **38.9** | **29.7** | 0.74 |
 | autonomous_search+LoRA | 1.50x | 30.0 | 23.4 | 0.79 |
 
     - **说明了什么**：同 LoRA 配方下生成式 F1 可读；本 informal 格 **iterative ≥ oneshot ≈ search**（与「search 必然更好」不符，与 CIFAR regime-dependent 兼容但 **不得当论文 LLM 主结论**）
     - **明确不说明**：n=64 噪声大；search 仍是单候选路径；dense F1 低于 pruned 不解释为「剪枝更好」；**仍不扩 2x / 不开 frozen test**
-17. [√] **当前结论更新（2026-08-16 晚）** — SQuAD / Phase K 收口叙事：
+18. [√] **KG.6 GLUE 预算对齐重扫（2026-08-20）**：`configs/qwen_glue_kg6.yaml` → `/mnt/data2/results/qwen_glue_kg6/`（~116 min；train 512 / eval 128；oneshot_recovery=true；`kg6_summary.json`）
+    - 相对 KG.5：**iterative 不再叠乘超剪**（1.5x/2.0x 实测均在目标 ±15%）；oneshot 开恢复后 acc 可读（非 0）
+    - **Baseline（no prune；carved val n=128）**：SST-2/RTE dense acc **85.9%**；QNLI **81.3%**（actual 1.00x）
+    - **At cell_target=1.5x（acc；实测 ~1.50x）**：SST-2 oneshot 45.3 / iterative **54.7** / search **54.7**；RTE 47.7–48.4；QNLI 46.9–53.1
+    - **At cell_target=2.0x（acc；实测 ~2.00x）**：SST-2 oneshot **52.3** / iterative 45.3 / search 42.2；RTE 四方法均 **50.0**；QNLI 53.1–53.9
+    - **说明**：未观察到稳定 search 优势；LLM 附录优先 GLUE 表而非 SQuAD 绝对分
+    - **不说明**：非论文 LLM 主表；n=128 单 seed；CE proxy ≠ acc
+19. [√] **K6 LoRA formal 小表（2026-08-20 完成）**：`configs/qwen_k6_lora_formal.yaml` → `/mnt/data2/results/qwen_k6_lora_formal/`（双卡分跑后合并 `k6_lora_formal_summary.json`；eval n=256 + frozen test）
+    - 配方：LoRA r=8，SQuAD chat packs **8192×2**；预算对齐 1.50x / 2.00x
+
+**Baseline（no prune；actual 1.00x；两档共用同一 dense）**
+
+| method | Val F1 / EM | Frozen F1 / EM |
+|--------|-------------|----------------|
+| dense | 23.98 / 3.91 | 15.17 / 2.34 |
+
+**At cell_target=1.5x（prune+LoRA；实测 ~1.50x）**
+
+| method | Val F1 / EM | Frozen F1 / EM |
+|--------|-------------|----------------|
+| oneshot | 31.48 / 23.83 | 25.87 / 21.48 |
+| iterative_level1 | 32.15 / 23.83 | **27.74 / 23.44** |
+| autonomous_search | **32.60 / 26.56** | 24.26 / 18.36 |
+
+**At cell_target=2.0x（prune+LoRA；实测 ~2.00x）**
+
+| method | Val F1 / EM | Frozen F1 / EM |
+|--------|-------------|----------------|
+| oneshot | 26.73 / 20.31 | 19.58 / 16.02 |
+| iterative_level1 | **28.58 / 20.31** | **24.49 / 20.31** |
+| autonomous_search | 21.34 / 16.02 | 16.56 / 12.89 |
+
+    - **方法排序**：1.5x 上 search≈iterative≈oneshot；2.0x 上 **iterative ≥ oneshot > search**（仍不支持 search 全面更优）
+    - **为何 pruned Val/Frozen F1 > dense（禁止写成「剪枝更好」）**：
+      1. **恢复不对称**：dense **没有** LoRA/SQuAD 恢复；剪枝三方法都做了 8192×2 LoRA → 增益主要来自**任务适配**，不是「少参数更强」
+      2. 公平对照只比 **同 LoRA 预算下的 oneshot / iterative / search**；dense 只作未适配基线
+      3. n=256、单 seed；Val 与 Frozen 差几个点属噪声量级
+      4. GLUE 对照：dense ~82–86% > 剪枝后 ~45–55%——分类任务上压缩有代价；SQuAD 反常正因 dense 未吃到同恢复
+    - **不说明**：非正式 LLM 主表；不能写「剪枝优于 dense」或「LLM 上 search 更优」
+20. [√] **当前结论更新（2026-08-20）** — SQuAD / Phase K 收口叙事：
 
 **总判断（定稿口径）**
 
 | 层级 | 结论 |
 |------|------|
-| 主贡献 | 仍是 **CIFAR regime-dependent** + **KG.5 GLUE 过渡** |
+| 主贡献 | 仍是 **CIFAR regime-dependent** + **KG.6 GLUE 过渡**（KG.5 为门禁；KG.6 预算对齐） |
 | SQuAD 短/中 SGD 恢复 | **负对照保留**：短 Level-1 与加深 SGD（512×4）剪枝后 F1≈0 |
-| SQuAD LoRA 恢复 @1.5x | **Informal 可读**：四方法 F1 25–39；预算对齐 1.50x |
-| 方法排序（本 informal 格） | **iterative ≥ oneshot ≈ search**；与「search 必然更好」不符 |
-| 论文 LLM 主表 | **仍非正式**（n=64；单 seed；单候选 search；frozen test 未开） |
-| 2x / frozen test | **暂不扩 / 不开** |
+| SQuAD LoRA Informal @1.5x | dense 基线 1.00x（F1 25.5）；剪枝三方法 F1 30–39 且实测 ~1.50x |
+| SQuAD LoRA formal | **[√] 完成**（1.5x/2.0x；n=256 + frozen）；仍 Informal 附录 |
+| 方法排序（formal） | 1.5x ≈ 打平；2.0x **iterative ≥ oneshot > search**（不含 dense） |
+| pruned F1 > dense | **恢复适配不对称**；禁止当剪枝优势 |
+| 论文 LLM 主表 | **仍非正式**（单 seed；单候选 search） |
 
 **能写进论文的句子（建议）**
 
 1. 生成式 SQuAD 对弱恢复极脆：短 SGD / 中等 SGD 加深后 F1 塌（负结果）。
-2. 对齐文献的 LoRA + 更大指令式恢复预算后，同压缩 1.5x 下 F1/EM 可读（附录/讨论 Informal 表）。
-3. 本 informal 格未支持「autonomous_search 优于 iterative」；与 CIFAR regime-dependent 叙事兼容，但不升级为 LLM 主主张。
+2. 对齐文献的 LoRA + 更大指令式恢复预算后，同压缩下 F1/EM 可读（附录/讨论 Informal 表；含 formal n=256）。
+3. formal 未支持「autonomous_search 优于 iterative」；与 CIFAR regime-dependent 兼容，但不升级为 LLM 主主张。
+4. dense 未做 LoRA 时 F1 低于 pruned+LoRA，应解释为**恢复不对称**，不得写成「剪枝使模型变强」。
 
 **不能写**
 
 - 「LLM 上已复现 regime crossover / search 全面更优」
-- 「剪枝后优于 dense」（dense F1 低于 pruned 属小样本噪声）
-- 把 n=64 Informal 表当正式主表
+- 「剪枝后优于 dense」
+- 把 Informal / formal 升格为论文 LLM 主表
 
-18. **之后**：PAPER_RESULTS_OUTLINE / EVIDENCE_PACK 同步本口径；Related Work 挂钩 LLM-Pruner；不默认扩 2x / 不重跑 formal100
+21. **之后**：PAPER_RESULTS_OUTLINE / EVIDENCE_PACK 同步本口径；不升格 LLM 主表；不重跑 formal100
+22. [√] **导师拍板 RQ 顺序（2026-08-20）**：写入 [MENTOR_DELIVERY.md](MENTOR_DELIVERY.md) §6
+    - **RQ4 必做**（下一档；优先 GLUE External vs Self 冒烟）
+    - **RQ3 排在 RQ4 之后**（不插队、非取消；非「投稿前永不做」）
+    - **仍待拍板**：本期主文是否只押 CIFAR、LLM 仅附录
+
+**当前开放优先级**
+
+1. [ ] **RQ4** 最小矩阵规划/冒烟（必做）
+2. [ ] **RQ3 / E9** — 仅 RQ4 有结论后
+3. [ ] 论文口径收口（主文范围仍待拍板）
+4. 不重跑 formal100
 
 Phase H / Phase I 证据：[EVIDENCE_PACK.md](EVIDENCE_PACK.md)。
 

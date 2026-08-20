@@ -1,12 +1,12 @@
 # Phase K — Qwen / GLUE → SQuAD 实现计划
 
-> 状态：**K0–K5 `[√]`** · **KG.5 `[√]`** · **K6 小扫 + SGD 加深负对照 `[√]`** · **K6 LoRA@1.5x 四方法 Informal `[√]`** · **K6-lit 短表 `[√]`** · 下一档 = **论文口径收口**（Informal 附录；不扩 2x / 不开 frozen test）
-> 导师调整（2026-08-16）：**在继续 SQuAD 正式/小矩阵前，先做 GLUE 看压缩效果**
-> 任务锁定（2026-08-16）：**GLUE 正式标准 = SST-2 + RTE + QNLI**；KG.5 必做门禁；SQuAD = 生成式主考卷（见 §1.1）
+> 状态：**K0–K5 `[√]`** · **KG.5/KG.6 `[√]`** · **K6 小扫 + SGD 负对照 `[√]`** · **K6 LoRA Informal/formal `[√]`** · **K6-lit `[√]`** · 下一档 = **RQ4 必做（规划/冒烟）** → 其后 **RQ3 / E9**
+> 导师（2026-08-16 / 08-20；**RQ 顺序再确认 08-20**）：**SQuAD 前先 GLUE**；**SQuAD 难压属预期**；**RQ4 必做**；**RQ3 排在 RQ4 之后**
+> 任务锁定：**GLUE 正式标准 = SST-2 + RTE + QNLI**；SQuAD = 生成式难压对照（见 §1.1）
 >
-> **当前结论（2026-08-16）**：短/中 SGD 恢复撑不起 SQuAD（负对照）；对齐文献的 **LoRA + 更大恢复预算** 后 1.5x 四方法 F1 可读（iterative ≥ oneshot ≈ search）；**非正式主表**；主贡献仍 CIFAR + GLUE 过渡。
-> 图例：`[√]` 已完成 · `[ ]` 未做 · `[×]` 证据不支持 / 不做
-> 规划前身：[PHASE_J_QWEN_PLAN.md](PHASE_J_QWEN_PLAN.md) · 视觉结论：[EVIDENCE_PACK.md](EVIDENCE_PACK.md) / [WORK_LOG.md](WORK_LOG.md)
+> **当前结论（2026-08-20）**：GLUE 过渡可读；SQuAD 弱恢复崩 + LoRA formal 附录可读但不升主表；pruned>dense = 恢复不对称；主贡献仍 CIFAR；**下一 LLM 科学目标 = RQ4（E12–E13）必做**；RQ3 排队其后。
+> 图例：`[√]` 已完成 · `[ ]` 未做 · `[×]` 证据不支持 / 不做 · `[~]` 暂缓 / 排队
+> 规划前身：[PHASE_J_QWEN_PLAN.md](PHASE_J_QWEN_PLAN.md) · 视觉结论：[EVIDENCE_PACK.md](EVIDENCE_PACK.md) / [WORK_LOG.md](WORK_LOG.md) · 交付：[MENTOR_DELIVERY.md](MENTOR_DELIVERY.md)
 > 总路线：[PROJECT_PLAN.md](../PROJECT_PLAN.md) · 主机：RTX 4090 · 权重/数据：`/mnt/data` · 运行产物：`/mnt/data2`
 
 ---
@@ -19,22 +19,25 @@
 - **train / validation / test 严格隔离**（选择只看 validation；test 冻结后一次）
 - **同压缩预算对照**：dense / oneshot / iterative+recovery / autonomous_search
 
-核心问题（与视觉域同一句式）：在 LLM 上，search vs iterative 是否仍呈 **regime-dependent**，还是塌成别的形态。
+过渡阶段核心问题：在 LLM 上，search vs iterative 是否仍呈 **regime-dependent**，还是塌成别的形态。
 
-**任务顺序（锁定）**：
+**下一科学问题（导师锁定，RQ4）**：压缩后的 child 是否还能可靠担任 controller（Self vs 始终用 dense/parent External）；是否出现 **Governance Frontier 早于 Task Frontier**。
 
-1. **KG — GLUE**：短文本闭集 NLU（正式子集 **SST-2 + RTE + QNLI**），先看剪枝+恢复是否出信号（当前优先）
-2. **K6 — SQuAD**：长文阅读理解小矩阵（**KG.5 门禁通过后再开**）
-3. **K6-lit**：外部压缩 baseline 调研（可与 KG 并行文档工作）
+**任务顺序（锁定，符合导师）**：
+
+1. **KG — GLUE**：短文本闭集 NLU（**SST-2 + RTE + QNLI**），先看剪枝+恢复是否出信号 `[√]`
+2. **K6 — SQuAD**：长文生成式；难压属预期；附录/负对照 `[√]`
+3. **K6-lit**：外部 baseline 调研短表 `[√]`
+4. **K7 — RQ4（下一步 · 必做）**：External vs Self controller 最小矩阵；优先 **GLUE** 冒烟；对应纲领 E12–E13
+5. **其后 — RQ3**：High-Gap / E9–E11；**仅 RQ4 有结论后**再开
 
 | 做 | 不做（本阶段默认） |
 |----|-------------------|
-| 1.5B 级 Qwen + **先 GLUE、后 SQuAD** | 7B / 14B；跳过 GLUE 直接开 SQuAD 小矩阵 |
+| 1.5B 级 Qwen + **先 GLUE、后 SQuAD** | 7B / 14B；跳过 GLUE 直接开 SQuAD 当主表 |
 | head / FFN 物理剪枝 + 参数量审计 | 把权重或 HF 缓存提交进 Git |
-| dense / oneshot 冒烟 → **三任务正式小扫（KG.5）** | 重跑 CIFAR formal100；全 GLUE 九任务大表 |
-| 复用搜索协议（门禁 / frontier / history） | 预设「search 全面更优」 |
-| manifest / fingerprint / frozen test 报告 | 放宽视觉域 2pt 门禁叙事到 LLM（须单独消融） |
-
+| dense / oneshot / iterative / search 同预算对照 | 预设「search 全面更优」 |
+| **RQ4 External vs Self（必做）** | **RQ3 / E9 插队**（须排在 RQ4 之后） |
+| manifest / fingerprint / frozen test（formal 已开） | 把 SQuAD F1 升格为论文 LLM 主主张 |
 ### 1.1 任务区分：GLUE vs SQuAD（锁定）
 
 **一句话**：GLUE 测短文本闭集判断；SQuAD 测长文开放抽答——二者不可互相替代。
@@ -44,9 +47,34 @@
 | GLUE | **SST-2** | 单句情感 | verbalizer → Accuracy | 冒烟（KG.4）+ 正式三任务之一 |
 | GLUE | **RTE** | 短文蕴含（二分类） | verbalizer → Accuracy | 正式 GLUE 标准 |
 | GLUE | **QNLI** | 问句–句对是否可答 | verbalizer → Accuracy | 正式 GLUE 标准 |
-| SQuAD | **SQuAD 2.0** | 长上下文阅读理解 / span + abstain | 生成 → F1 / EM | LLM **生成式主标准**（K6） |
+| SQuAD | **SQuAD 2.0** | 长上下文阅读理解 / span + abstain | 生成 → F1 / EM | **难压对照 / 附录**（导师：没那么好压缩；非 LLM 主表） |
 
 **协议（写死）**：
+
+- GLUE：先于 SQuAD；分类信号稳定后再开生成式成本（导师已确认）。
+- SQuAD：官方 validation = frozen test；绝对 F1 低不单独构成「实验失败」，应写难压局限。
+
+### 1.2 RQ 优先级（导师修订，对齐纲领 PDF）
+
+| RQ | 含义 | 本仓库态度 |
+|----|------|------------|
+| RQ1 | Frontier / adaptive vs fixed | CIFAR 主证据；LLM 过渡 |
+| RQ2 | 损伤有结构 | GLUE/SQuAD 弱证据即可 |
+| RQ3 | High-Gap / Synthetic 恢复数据（E9–E11） | **`[ ]` RQ4 之后做** — 不插队、非取消 |
+| RQ4 | Self vs External controller（E12–E13→E14） | **`[ ]` 必做 · 下一档** |
+
+**RQ4 最小可叙述问题**：压缩后的 Mt 是否还能可靠决定下一轮剪谁/剪多少；Governance 是否比 Task 更早崩。
+
+**RQ4 最小矩阵（规划，未跑）**：
+
+| 臂 | Controller | 说明 |
+|----|------------|------|
+| External | 始终 dense / 初始 parent M0 | 对照 |
+| Self | 当前 accepted 压缩模型 Mt | 自治理 |
+
+建议先在 **SST-2 或 GLUE 三任务、1.5x/2.0x、单 seed** 冒烟；有信号再扩。E14 多代 lineage 仅当 E12/E13 有信号后。
+
+**评测细节（写死）**：
 
 - GLUE 一律 `prompt + verbalizer`（**不用**分类头）；数据划分与视觉同构（官方 validation = frozen test）
 - Verbalizer 标签（固定，禁止中途混比）：
@@ -58,7 +86,8 @@
 
 - SST-2 冒烟 accuracy **不得**写成 LLM 主结论（须标冒烟）
 - 三任务对照表可作 LLM **过渡 / 短 NLU** 证据
-- 生成式主证据仍写 **SQuAD**（F1 / EM）
+- SQuAD = **难压局限 / 附录**（导师确认）；**不得**升格为论文 LLM 主主张
+- 下一贡献点预告：**RQ4 Self-Governance（必做）** → 其后 RQ3
 
 ---
 
@@ -68,12 +97,12 @@
 |----|--------|
 | 模型 | `Qwen/Qwen2.5-1.5B-Instruct` |
 | 本地权重 | `/mnt/data/models/Qwen2.5-1.5B-Instruct` |
-| **当前优先任务** | **GLUE**（见 §KG） |
+| **当前优先任务** | **RQ4 规划/冒烟（必做）**；其后 RQ3；论文收口并行 |
 | GLUE 数据缓存 | `/mnt/data/datasets/glue` |
 | GLUE 冒烟子集 | **SST-2**（管线打通；指标非正式） |
 | **GLUE 正式标准** | **SST-2 + RTE + QNLI**（三任务；不做全 GLUE 九任务） |
 | GLUE 主指标 | **Accuracy**（百分制；任务特殊指标若有则附记） |
-| **SQuAD（生成式主标准）** | SQuAD 2.0（`rajpurkar/squad_v2`）；主指标 **F1 / EM** |
+| **SQuAD（难压对照）** | SQuAD 2.0（`rajpurkar/squad_v2`）；主指标 **F1 / EM**；附录非主表 |
 | SQuAD 数据缓存 | `/mnt/data/datasets/squad`（K1 已下载） |
 | 剪枝单元 | attention **KV-group**；FFN **intermediate** |
 | 设备 | CUDA（4090 24GB）；环境入口 `source scripts/env_llm.sh` |
@@ -200,6 +229,14 @@ python experiments/run_qwen_k5_smoke.py --config configs/qwen_k5_smoke.yaml
 | KG.3 | `[√]` | Level-1 短恢复接到 GLUE LM pack | 只看 carved val |
 | KG.4 | `[√]` | 四方法冒烟（**仅 SST-2**）+ chat/SDPA 重跑 | dense acc≈84.4（32 条 carved val）；`/mnt/data2/results/qwen_glue_smoke/` |
 | KG.5 | `[√]` | **必做**：SST-2+RTE+QNLI × 1.5x/2x 四方法小扫 | 可读压缩信号已有；产物 `/mnt/data2/results/qwen_glue_kg5/`（~82 min；32 条 carved val；非正式主表） |
+| KG.6 | `[√]` | 预算对齐重扫：三任务 × 1.5x/2x；train 512 / eval 128；oneshot_recovery | `/mnt/data2/results/qwen_glue_kg6/`（~116 min；`kg6_summary.json`） |
+
+复跑（KG.6）：
+
+```bash
+source scripts/env_llm.sh
+python experiments/run_qwen_glue_kg6.py --config configs/qwen_glue_kg6.yaml
+```
 
 复跑（KG.5）：
 
@@ -226,9 +263,16 @@ python experiments/run_qwen_glue_smoke.py --config configs/qwen_glue_smoke.yaml
 2. Oneshot 无恢复几乎全崩 → 负结果，Level-1 恢复必要。
 3. 1.5x 档 iterative 更稳；2.0x 档掉点加大。
 4. search vs iterative 已 crossover（禁止「全面更优」）；与 CIFAR regime-dependent 兼容，LLM 侧仅过渡证据。
-5. 读表修正：iterative 实测超标（~1.88 / ~2.81）；CE ≠ 任务 acc；n=32。K6 须同预算对齐。
+5. 读表修正：KG.5 iterative 实测超标（~1.88 / ~2.81）；**KG.6 已修复**（±15%）；CE ≠ 任务 acc。
 
-### K6 — SQuAD 小矩阵与报告 `[√]` 小扫已跑（非正式；frozen test 未开）
+**KG.6 结果解读（2026-08-20）**：
+
+1. 预算对齐：1.5x/2.0x 实测均在目标 ±15%（无 KG.5 叠乘）。
+2. oneshot_recovery 开启后 acc 可读（对比 KG.5 oneshot acc≈0）。
+3. dense 为未剪枝基线（actual 1.00x）；剪枝方法挂 cell_target。
+4. 未观察到稳定 search 优势；LLM 附录表优先用 GLUE 而非 SQuAD 绝对分。
+
+### K6 — SQuAD 小矩阵与报告 `[√]` 小扫已跑；**LoRA formal `[√]`**
 
 | 子项 | 状态 | 默认 |
 |------|------|------|
@@ -236,8 +280,8 @@ python experiments/run_qwen_glue_smoke.py --config configs/qwen_glue_smoke.yaml
 | 压缩目标 | `[√]` | **1.5x / 2x / 4x**（MLP-only 名义 4x 实测上限约 3.1–3.6x） |
 | seed | `[√]` | 1 seed（小扫） |
 | 恢复预算 | `[√]` | 相对 dense 累计压缩已修（`baseline_parameter_count`）；1.5x/2.0x 对齐；禁止 KG.5 叠乘 |
-| 冻结 test | `[ ]` | 官方 validation **只评一次**（尚未开） |
-| 产物 | `[√]` | `/mnt/data2/results/qwen_k6/` + `k6_summary.json` + WORK_LOG |
+| 冻结 test | `[√]` | LoRA formal 已开并完成（n=256；各方法一次） |
+| 产物 | `[√]` | 小扫 `/mnt/data2/results/qwen_k6/`；formal `/mnt/data2/results/qwen_k6_lora_formal/`（8/8 + 合并 summary） |
 | 叙事 | `[√]` | 小扫允许失败；**禁止**「search 全面更优」；F1 主表须标 n=16 carved val |
 
 **结果解读（2026-08-16；含后续 LoRA）**：
@@ -245,9 +289,21 @@ python experiments/run_qwen_glue_smoke.py --config configs/qwen_glue_smoke.yaml
 1. **预算对齐成功**：1.5x/2.0x 实测 ≈ 目标；不再出现 KG.5 式 ~2.8x 超剪。
 2. **dense 可读**：chat+SDPA 下 F1≈30.6（16 条）/ ≈25.5（64 条）；CE finite。
 3. **短 SGD / 加深 SGD 不足（负对照）**：1 epoch 或 512×4 SGD 后剪枝 F1≈0（CE 仍有限）→ 弱恢复撑不起生成式 QA。
-4. **LoRA@1.5x Informal 可读**（8192×2；n=64；产物 `qwen_k6_recover_lora_1p5x*`）：dense 25.5 / oneshot 30.6 / iterative **38.9** / search 30.0；均 1.50x。本格 **iterative ≥ oneshot ≈ search**。
+4. **LoRA@1.5x Informal 可读**（8192×2；n=64；产物 `qwen_k6_recover_lora_1p5x*`）。**dense 是未剪枝基线（实测 1.00x），不要写成「四方法均 1.50x」**：
+   - Baseline（no prune）：dense F1 **25.5**（actual 1.00x）
+   - cell_target=1.5x（prune+LoRA，实测均 ~1.50x）：oneshot 30.6 / iterative **38.9** / search 30.0
+   - 本格 **iterative ≥ oneshot ≈ search**
 5. **4x 名义不可达（MLP-only）**：oneshot/search≈3.07x，iterative≈3.62x；须记上限或扩剪枝单元。
-6. **不说明**：非正式主表；不能证 search 优于 iterative；不能替代多 seed / frozen test；不扩 2x。
+6. **不说明**：Informal 非正式主表；不能证 search 优于 iterative；不能替代多 seed。
+
+**LoRA formal `[√]`（2026-08-20）**：
+
+- 配置：`configs/qwen_k6_lora_formal.yaml`；8192×2 LoRA；eval n=256；frozen test；产物 `/mnt/data2/results/qwen_k6_lora_formal/`（合并 summary）
+- **Baseline（actual 1.00x）**：dense val F1 **23.98** / frozen **15.17**
+- **1.5x（~1.50x）**：oneshot 31.48/25.87 · iterative 32.15/**27.74** · search **32.60**/24.26（val/frozen F1）
+- **2.0x（~2.00x）**：oneshot 26.73/19.58 · iterative **28.58/24.49** · search 21.34/16.56
+- 排序：1.5x ≈ 打平；2.0x **iterative ≥ oneshot > search**
+- **pruned F1 > dense**：dense **无** LoRA；剪枝臂有 LoRA → **恢复不对称**，禁止写「剪枝更好」。公平对照只比三方法。
 
 复跑：
 
@@ -258,6 +314,8 @@ python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml
 python experiments/run_qwen_k6.py --config configs/qwen_k6_recover_lora_1p5x.yaml
 # LoRA Informal（iterative+search）：
 python experiments/run_qwen_k6.py --config configs/qwen_k6_recover_lora_1p5x_methods.yaml
+# LoRA formal（1.5x+2.0x；eval 256 + frozen test）：
+python experiments/run_qwen_k6.py --config configs/qwen_k6_lora_formal.yaml
 ```
 
 ### K6-lit — 外部压缩 baseline（自动搜索 vs 人工设计）`[~]` 文献短表已写
@@ -349,14 +407,13 @@ LLM 上（更新后口径）：
 
 ## 8. 下一步（立即）
 
-1. [√] **稳定 GLUE 评测**：chat template + SDPA + CE float32（SST-2 已重跑，dense acc≈84%）
-2. [√] **下载补齐 RTE / QNLI**（与 SST-2 同缓存协议）
-3. [√] **KG.5（必做）**：SST-2+RTE+QNLI × 1.5x/2x 四方法小扫；可读信号已有（`qwen_glue_kg5`）
-4. [√] **K6（SQuAD）小矩阵**：预算对齐 + chat；`/mnt/data2/results/qwen_k6/`（短恢复 F1 塌）
-5. [√] **加深 SGD 1.5x**：负对照（`qwen_k6_recover_1p5x`）
-6. [√] **LoRA Informal 1.5x**：R1 + iterative/search（`qwen_k6_recover_lora_1p5x*`）
-7. [√] **K6-lit**：短表 [K6_LIT_BASELINE_SHORTLIST.md](K6_LIT_BASELINE_SHORTLIST.md)
-8. [ ] 论文口径收口：PAPER_RESULTS_OUTLINE / EVIDENCE_PACK 同步；**不扩 2x**；frozen test 延后
+1. [√] **稳定 GLUE 评测** … KG.5/KG.6 …
+2. [√] **K6 SQuAD** 小扫 + SGD 负对照 + LoRA Informal/formal（难压属预期）
+3. [√] **K6-lit** 短表
+4. [ ] **论文口径收口**：CIFAR 主文 + GLUE 过渡 + SQuAD 难压局限；不升格 LLM 主表（主文范围仍待拍板）
+5. [ ] **RQ4 规划/冒烟（必做）**：External vs Self controller；优先 GLUE
+6. [ ] **RQ3 / E9** — **仅 RQ4 有结论后再开**
+7. [ ] E14 全自主多代 — **仅当 RQ4 有信号后**
 
 ---
 

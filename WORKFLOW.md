@@ -48,3 +48,10 @@ P1.2 的 CUDA 基础层已部署。GPU 任务必须在新 NVIDIA 主机上先执
 2. 阶段完成后运行 `python -m pytest tests -q`。
 3. 再运行不下载数据的合成端到端测试。
 4. 最后才执行 MNIST smoke 或长实验，并检查 JSON、JSONL、CSV、PNG 和 checkpoint 是否可读取。
+
+## 导师交付表与问题上报
+
+- **交付表唯一入口**：导师要看的结果表只维护 [`docs/MENTOR_DELIVERY.md`](docs/MENTOR_DELIVERY.md)。改数字必须对照产物 JSON 或 [`docs/EVIDENCE_PACK.md`](docs/EVIDENCE_PACK.md)，禁止凭记忆改表。
+- **实验问题**：写入 [`docs/WORK_LOG.md`](docs/WORK_LOG.md)「问题/阻塞」；精简结论同步 [`docs/WORK_LOG_BRIEF.md`](docs/WORK_LOG_BRIEF.md)。
+- **重大问题当轮上报**：P0（主表数字对不上产物、无法复现、口径与导师口头冲突、要改 RQ 优先级/加卡/换模型）必须在**当轮聊天明确告诉用户**，并记入 MENTOR_DELIVERY「需导师拍板」——不埋在文档里等交付才发现。
+- **分级**：P0 立刻说 + 待拍板；P1（负结果、协议不对称、单 seed、已修复的覆盖/超剪）如实记入已知问题；P2（测试/文档小修）日志即可。细则见 MENTOR_DELIVERY §5。

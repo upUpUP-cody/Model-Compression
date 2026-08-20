@@ -126,3 +126,46 @@ def test_glue_loaders_build_ok():
     batch = next(iter(train_loader))
     assert "input_ids" in batch and "labels" in batch and "attention_mask" in batch
     assert len(val_loader) >= 1
+
+
+def test_glue_oneshot_recovery_flag_runs_configured_recovery():
+    from transformers import Qwen2Config, Qwen2ForCausalLM
+
+    from src.experiments.qwen_glue_comparison import _oneshot
+
+    config = Qwen2Config(
+        hidden_size=64,
+        intermediate_size=128,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        vocab_size=128,
+        max_position_embeddings=128,
+        use_cache=False,
+    )
+    model = Qwen2ForCausalLM(config)
+    model.eval()
+    tok = _FakeTok()
+    train_loader, val_loader = build_glue_lm_loaders(
+        {"train": _fake_sst2(4), "validation": _fake_sst2(2)},
+        tok,
+        batch_size=2,
+        max_seq_len=64,
+        train_max_samples=4,
+        validation_max_samples=2,
+    )
+    cfg = {
+        "hardware": {"device": "cpu", "precision": "fp32"},
+        "pruning": {"oneshot_mlp_ratio": 0.25},
+        "recovery": {"backend": "sgd", "epochs": 1, "learning_rate": 1e-3},
+        "comparison": {
+            "target_compression_ratio": 0.0,
+            "oneshot_recovery": True,
+            "oneshot_recovery_epochs": 1,
+        },
+    }
+    pruned, details = _oneshot(model, cfg, "cpu", train_loader, val_loader)
+    assert details["applied"] is True
+    assert isinstance(details.get("recovery"), dict)
+    assert details["recovery"].get("best_validation_loss") is not None
+    assert sum(p.numel() for p in pruned.parameters()) > 0

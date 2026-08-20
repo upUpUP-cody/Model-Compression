@@ -26,6 +26,28 @@ def _tiny_qwen():
     return model
 
 
+def test_iterative_125_then_15_stays_near_global_15():
+    """KG.6 gate: two-stage 1.25 -> 1.5 must not compound to ~1.88 like KG.5."""
+    dense = _tiny_qwen()
+    dense_count = count_params(dense)
+    backend = resolve_pruning_backend(dense, "qwen")
+
+    ratios_125 = ratios_for_stage_target(dense, 1.25, baseline_parameter_count=dense_count)
+    model_125 = backend.create_pruned_model(ratios_125)
+    comp_125 = dense_count / max(count_params(model_125), 1)
+    assert 1.12 <= comp_125 <= 1.38, f"stage1 1.25x compression={comp_125}"
+
+    ratios_15 = ratios_for_stage_target(
+        model_125,
+        1.5,
+        baseline_parameter_count=dense_count,
+    )
+    model_15 = resolve_pruning_backend(model_125, "qwen").create_pruned_model(ratios_15)
+    comp_15 = dense_count / max(count_params(model_15), 1)
+    assert 1.35 <= comp_15 <= 1.65, f"stage2 1.5x compression_vs_dense={comp_15}"
+    assert comp_15 < 1.80, "compounding regression: 1.25x then 1.5x overshot like KG.5 (~1.88)"
+
+
 def test_iterative_stages_do_not_compound_past_global_target():
     dense = _tiny_qwen()
     dense_count = count_params(dense)
