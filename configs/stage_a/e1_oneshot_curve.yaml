@@ -1,9 +1,9 @@
 # E1 One-shot sparsity curve (PDF Stage A)
 experiment_id: E1
 model:
-  path: /mnt/data/models/Qwen2.5-1.5B-Instruct
+  path: /mnt/data/models/Qwen2.5-3B-Instruct
   pdf_model: Qwen2.5-3B-Instruct
-  spec: proxy_1.5B
+  spec: formal_3B
   torch_dtype: float16
 
 # PDF: Wanda 10..70%; smoke subset + magnitude proxy for Wanda

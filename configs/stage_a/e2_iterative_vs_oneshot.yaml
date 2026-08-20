@@ -1,9 +1,9 @@
 # E2 Iterative vs One-shot (PDF Stage A)
 experiment_id: E2
 model:
-  path: /mnt/data/models/Qwen2.5-1.5B-Instruct
+  path: /mnt/data/models/Qwen2.5-3B-Instruct
   pdf_model: Qwen2.5-3B-Instruct
-  spec: proxy_1.5B
+  spec: formal_3B
   torch_dtype: float16
 
 # PDF targets 40/50/60%; smoke 40% and 50%

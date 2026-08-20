@@ -72,8 +72,9 @@ grep -rn "[\U0001F000-\U0001FFFF]" src/ experiments/
 加卡到位后的推荐用法（多进程拆分，以实际 CLI 为准）：
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml --targets 1.5,2.0
-CUDA_VISIBLE_DEVICES=1 python experiments/run_qwen_k6.py --config configs/qwen_k6.yaml --targets 4.0
+# Example: split independent Stage C cells across two GPUs (adjust configs/CLI to actual E job)
+CUDA_VISIBLE_DEVICES=0 python experiments/stage_c/run_e8_random_recovery.py --config configs/stage_c/e8_random_recovery.yaml
+CUDA_VISIBLE_DEVICES=1 python experiments/stage_c/run_e9_high_gap_recovery.py --config configs/stage_c/e9_high_gap_recovery.yaml
 ```
 
 #### B. 建议优化配置（与加卡独立；单卡也可触发）

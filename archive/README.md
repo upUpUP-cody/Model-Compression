@@ -1,21 +1,34 @@
 # Archive index
 
-Historical / non-essential files. **Main numbering is PDF E0–E14 only** (`docs/project/EXPERIMENT_E_MAP.md`).
-Nothing here is deleted; restore with `git mv` if needed.
+Historical / non-essential files kept for **active references** or **CIFAR/Non-E reproduction**.
+Main numbering is PDF **E0–E14** only (`docs/project/EXPERIMENT_E_MAP.md`).
+Restore with `git` if needed. Orphan Qwen K/GLUE runners, early MNIST `exp_*`, and superseded `EXECUTION_PLAN` were removed.
 
-| Archived path | Original | Reason |
-|---------------|----------|--------|
-| `docs/EVIDENCE_PACK.md` | `docs/` | 旧「Phase H」证据包；CIFAR 详表仍可查，不作主编号 |
-| `docs/PHASE_J_QWEN_PLAN.md` | `docs/` | 旧 Phase J |
-| `docs/PHASE_K_QWEN_PLAN.md` | `docs/` | 旧 Phase K / KG.* |
-| `docs/P2_EXECUTION_PLAN.md` | `docs/` | 旧 P2 |
-| `docs/CIFAR_SEARCH_UNDERCOMPRESSION.md` | `docs/` | 历史根因笔记 |
-| `archive/docs/GPU_WORKFLOW.md` | `docs/` | 旧 GPU 交接 |
-| `docs/K6_LIT_BASELINE_SHORTLIST.md` | `docs/` | 文献短表 |
-| `docs/PAPER_RESULTS_OUTLINE.md` | `docs/` | 旧论文提纲 |
-| `root/EXECUTION_PLAN.md` | repo root | 由 E-MAP 取代 |
-| `configs_legacy/*.yaml` | `configs/` | 预 Stage 配置 |
-| `experiments_legacy/*.py` | `experiments/` | 预 Stage runners |
+## Docs (`archive/docs/`)
+
+| File | Why kept |
+|------|----------|
+| `EVIDENCE_PACK.md` | CIFAR formal100 详表；主树多处引用 |
+| `PAPER_RESULTS_OUTLINE.md` | `PROJECT_PLAN` 引用 |
+| `K6_LIT_BASELINE_SHORTLIST.md` | `PROJECT_PLAN` 引用 |
+| `GPU_WORKFLOW.md` | `WORKFLOW` / `ENVIRONMENT` 引用 |
+| `P2_EXECUTION_PLAN.md` | 历史 P2 手册；`PROJECT_PLAN` 引用 |
+| `CIFAR_SEARCH_UNDERCOMPRESSION.md` | 欠压根因笔记（挂接 EVIDENCE_PACK） |
+| `PHASE_J_QWEN_PLAN.md` / `PHASE_K_QWEN_PLAN.md` | 迁移规划史料；命令路径可能过时 |
+
+## Experiments (`archive/experiments_legacy/`)
+
+Shim targets under `experiments/run_*.py`, plus CIFAR baseline reproduction:
+
+- `run_p12_comparison.py` / `run_p12_multiseed.py`
+- `run_cifar_p12_comparison.py` / `run_cifar_p12_multiseed.py`
+- `run_cifar_recovery_ablation.py` / `run_cifar_crossover_path_ablation.py`
+- `exp_cifar_baseline.py`
+
+## Configs (`archive/configs_legacy/`)
+
+- All remaining **CIFAR** yaml (formal100 / ia_prime / crossover / budget_match / lowcomp / baseline / recovery / study-smoke-sweep)
+- **MNIST** p12 + `mnist_mlp_autonomous_cpu.yaml` (tests / GPU_WORKFLOW / runner defaults)
 
 **Still needed for tests:** thin shims under `experiments/run_*.py` load from `experiments_legacy/`.
 Config paths in tests point at `archive/configs_legacy/`.

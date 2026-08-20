@@ -10,7 +10,7 @@ export HF_HUB_CACHE=/mnt/data/hf/hub
 export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
 export LLM_DATA_ROOT=/mnt/data
-export LLM_MODEL_DIR=/mnt/data/models/Qwen2.5-1.5B-Instruct
+export LLM_MODEL_DIR=/mnt/data/models/Qwen2.5-3B-Instruct
 export LLM_SQUAD_DIR=/mnt/data/datasets/squad
 export LLM_GLUE_DIR=/mnt/data/datasets/glue
 

@@ -1,19 +1,24 @@
-# E0 Dense Model Baseline (PDF Stage A)
-# PDF model: Qwen2.5-3B-Instruct — disk has 1.5B only (spec: proxy_1.5B)
-
+# E0 Dense baseline — formal Qwen2.5-3B-Instruct
 experiment_id: E0
 model:
-  path: /mnt/data/models/Qwen2.5-1.5B-Instruct
+  path: /mnt/data/models/Qwen2.5-3B-Instruct
   pdf_model: Qwen2.5-3B-Instruct
-  spec: proxy_1.5B
+  spec: formal_3B
   torch_dtype: float16
+
+hardware:
+  device: cuda:0
+  batch_size: 1
 
 evaluation:
   max_seq_len: 256
-  max_batches: 16
-  batch_size: 1
+  validation_max_samples: 64
   train_max_samples: 64
-  validation_max_samples: 32
+
+logging:
+  output_root: /mnt/data2/results/E0_dense_baseline
+
+seed: 42
 
 dataset:
   name: nyu-mll/glue
@@ -21,12 +26,3 @@ dataset:
   cache_dir: /mnt/data/datasets/glue
   validation_fraction: 0.1
   split_seed: 42
-
-hardware:
-  device: cuda:0
-  batch_size: 1
-
-logging:
-  output_root: /mnt/data2/results/E0_dense_baseline
-
-seed: 42

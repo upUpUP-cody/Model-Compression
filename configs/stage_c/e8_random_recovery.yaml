@@ -1,9 +1,9 @@
 # E8 Random recovery (PDF Stage C) — resumable by cell
 experiment_id: E8
 model:
-  path: /mnt/data/models/Qwen2.5-1.5B-Instruct
+  path: /mnt/data/models/Qwen2.5-3B-Instruct
   pdf_model: Qwen2.5-3B-Instruct
-  spec: proxy_1.5B
+  spec: formal_3B
   torch_dtype: float16
 
 child_sparsity: 0.50

@@ -8,11 +8,13 @@
 
 ```bash
 python -m pytest tests -q
-# Legacy MNIST (archived configs/runners):
-python experiments/run_autonomous_search.py --config archive/configs_legacy/mnist_mlp_autonomous_cpu.yaml
+# Stage A (E0–E3 proxy):
+bash scripts/run_stage_a.sh
+# or:
+python experiments/stage_a/run_e0_dense.py --config configs/stage_a/e0_dense.yaml
 ```
 
-`experiments/run_*.py` shims load `archive/experiments_legacy/`. Prefer Stage A entrypoints under `experiments/stage_a/`.
+`experiments/run_*.py` shims load `archive/experiments_legacy/`（CIFAR/MNIST p12 等）。主线用 `experiments/stage_*`。旧 `run_autonomous_search` 已从 archive 删除。
 
 ## 实验运行规则
 
@@ -30,7 +32,7 @@ python experiments/run_autonomous_search.py --config archive/configs_legacy/mnis
 
 ## GPU
 
-`python scripts/check_gpu.py --device cuda:0`。旧 GPU 交接见 `archive/archive/docs/GPU_WORKFLOW.md`。
+`python scripts/check_gpu.py --device cuda:0`。旧 GPU 交接见 `archive/docs/GPU_WORKFLOW.md`。
 
 ## 验证顺序
 

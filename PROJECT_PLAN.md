@@ -416,7 +416,7 @@ search:
   - 迭代 / 自主搜索在高压缩下仍接近 baseline（约 97–98%）
 
 #### 步骤 F.2b: CIFAR-10 + ResNet-18 P1.2（P2）
-- **状态**: [完成] 协议与主证据已齐；详见 WORK_LOG §2.2–2.8 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md)
+- **状态**: [完成] 协议与主证据已齐；详见 WORK_LOG §2.2–2.8 与 [archive/docs/P2_EXECUTION_PLAN.md](archive/docs/P2_EXECUTION_PLAN.md)
 - **任务**: 同一六方法协议迁移到 CNN
 - **要点**:
   - 只剪 BasicBlock 内 `conv1`；残差 I/O 宽度不变
