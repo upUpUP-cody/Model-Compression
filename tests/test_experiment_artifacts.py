@@ -18,7 +18,7 @@ from src.utils.experiment_artifacts import (
 from src.utils.search_visualization import plot_search_history
 
 
-CONFIG_PATH = Path("configs/mnist_mlp_autonomous_cpu.yaml")
+CONFIG_PATH = Path("archive/configs_legacy/mnist_mlp_autonomous_cpu.yaml")
 
 
 def test_cpu_config_loads_and_rejects_unavailable_cuda_and_cpu_amp():

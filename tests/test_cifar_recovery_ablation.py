@@ -15,7 +15,7 @@ CONV1_NAMES = {f"layer{stage}.{block}.conv1" for stage in range(1, 5) for block 
 
 def test_ablation_config_derives_all_conv1_ratios():
     root = Path(__file__).resolve().parents[1]
-    loaded = yaml.safe_load((root / "configs/cifar_recovery_ablation.yaml").read_text(encoding="utf-8"))
+    loaded = yaml.safe_load((root / "archive/configs_legacy/cifar_recovery_ablation.yaml").read_text(encoding="utf-8"))
     assert loaded["comparison"].get("oneshot_layer_ratios") in (None, {})
     assert float(loaded["comparison"]["target_compression_ratio"]) == 2.0
     assert loaded["comparison"]["recovery_levels"] == [1, 2, 3]

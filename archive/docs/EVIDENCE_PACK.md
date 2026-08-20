@@ -1,8 +1,10 @@
-# 证据包（Phase H）
+# 证据包（已归档 · 原 Phase H 记号）
 
-> 用途：论文 / 答辩 / 交接时的证据索引与叙事提纲。  
-> 详细过程日志：[WORK_LOG.md](WORK_LOG.md) · 精简：[WORK_LOG_BRIEF.md](WORK_LOG_BRIEF.md) · **论文成果**：[PAPER_RESULTS_OUTLINE.md](PAPER_RESULTS_OUTLINE.md) · 总计划：[../PROJECT_PLAN.md](../PROJECT_PLAN.md)  
-> 日期：2026-08-14（Phase I 更新：2026-08-15）· 主机：RTX 4090 · 含 20 epoch smoke 与 100 epoch 正式基线
+> **注意**：本文件已迁入 `archive/docs/`。实验主编号以 PDF **E0–E14** 为准（见 `docs/EXPERIMENT_E_MAP.md` / `docs/WORK_LOG.md`）。下文仅保留 CIFAR/MNIST 历史详表。
+>
+> 用途：论文 / 答辩 / 交接时的证据索引与叙事提纲（历史）。
+> 现行日志：[../../docs/WORK_LOG.md](../../docs/WORK_LOG.md) · 精简：[../../docs/WORK_LOG_BRIEF.md](../../docs/WORK_LOG_BRIEF.md)
+> 日期：2026-08-14（更新：2026-08-15）· 主机：RTX 4090 · 含 20 epoch smoke 与 100 epoch 正式基线
 
 ---
 
@@ -62,7 +64,7 @@ CIFAR 额外约束：只剪 BasicBlock 内 `conv1`，残差块 I/O 宽度不变�
 
 ### 4.1 sweep_v2（20 epoch；历史）
 
-**产物**：`results/cifar_p12_comparison_gpu_sweep_v2/`  
+**产物**：`results/cifar_p12_comparison_gpu_sweep_v2/`
 **设定**：seeds 42/43/44；`recovery_epochs: 2`；门禁修复 + 目标压缩止损。
 
 | 目标 | oneshot_mag | oneshot_wanda | iterative | search |
@@ -73,7 +75,7 @@ CIFAR 额外约束：只剪 BasicBlock 内 `conv1`，残差块 I/O 宽度不变�
 
 ### 4.2 sweep_v3（20 epoch；增量逼近后）
 
-**产物**：`results/cifar_p12_comparison_gpu_sweep_v3/`  
+**产物**：`results/cifar_p12_comparison_gpu_sweep_v3/`
 **设定**：`max_step_compression=1.75`，`max_iterations=8`（随后 I.A′ 提到 12）。
 
 多数 ≥4x search 已接近目标；残留 `4x seed43` 过冲 / `10x seed42` 欠压，由 I.A′ 修复并短验证（见 §4.3）。
@@ -88,7 +90,7 @@ Test（摘录，search vs iterative）：
 
 ### 4.3 I.A′ 边界短验证
 
-**产物**：`results/cifar_p12_ia_prime_validate/`  
+**产物**：`results/cifar_p12_ia_prime_validate/`
 修复：禁止 target 模式 fallback 全目标比例；过滤 `>target*1.15`；`max_iterations=12`。
 
 | 案例 | 修复前 | 修复后 |
@@ -98,7 +100,7 @@ Test（摘录，search vs iterative）：
 
 ### 4.4 正式基线关键对照（Phase I.B）
 
-**产物**：`results/cifar_p12_comparison_gpu_formal100_key/`  
+**产物**：`results/cifar_p12_comparison_gpu_formal100_key/`
 **checkpoint**：`cifar_resnet18_baseline_formal100.pth`
 
 | 目标 | iterative comp / test | search comp / test | 同压缩 |
@@ -114,7 +116,7 @@ Test（摘录，search vs iterative）：
 
 ### 4.5 正式全表（formal100_full）
 
-**产物**：`results/cifar_p12_comparison_gpu_formal100_full/`  
+**产物**：`results/cifar_p12_comparison_gpu_formal100_full/`
 **设定**：正式基线；1.5/2/4/6/8/10 × 3 seed；I.A′ 边界；全部 ≥4x search 压缩在目标 ±15%。
 
 | 目标 | iterative test | search test | 同压缩 | 读法 |
@@ -130,7 +132,7 @@ Test（摘录，search vs iterative）：
 
 ### 4.6 Crossover 机制消融（10x）
 
-**产物**：`results/cifar_crossover_path_ablation/`  
+**产物**：`results/cifar_crossover_path_ablation/`
 **设定**：formal100；10x；seeds 42/43/44；同 L1 恢复预算。Search-gated 复用 formal100_full。
 
 | Arm | test mean±std | 含义 |
@@ -143,7 +145,7 @@ Test（摘录，search vs iterative）：
 
 ### 4.7 Crossover 稳健性消融（8x）
 
-**产物**：`results/cifar_crossover_path_ablation_8x/`  
+**产物**：`results/cifar_crossover_path_ablation_8x/`
 **设定**：同协议；目标 **8.0x**；seeds 42/43/44；search_gated 复用 formal100_full `ratio_8_seed_*`。
 
 | Arm | test mean±std | compression |
@@ -163,7 +165,7 @@ Test（摘录，search vs iterative）：
 
 ### 4.8 低压缩差距诊断（4x）
 
-**产物**：`results/cifar_crossover_path_ablation_4x/`（含 `PROCESS_COMPARE.md`）  
+**产物**：`results/cifar_crossover_path_ablation_4x/`（含 `PROCESS_COMPARE.md`）
 **设定**：同三臂；目标 **4.0x**；search_gated 复用 formal100_full `ratio_4_seed_*`。
 
 | Arm | test mean±std | compression |
@@ -186,7 +188,7 @@ Test（摘录，search vs iterative）：
 
 ### 4.9 恢复预算对齐（2x/4x）
 
-**产物**：`results/cifar_p12_budget_match_key/`（含 `BUDGET_REPORT.md`）  
+**产物**：`results/cifar_p12_budget_match_key/`（含 `BUDGET_REPORT.md`）
 **设定**：`iterative_recovery_epochs=6`；search 每 accept 仍 2 epoch；formal100 基线。
 
 | target | iterative | search | delta (it−se) |
@@ -198,7 +200,7 @@ Test（摘录，search vs iterative）：
 
 ### 4.10 低压缩一步到目标关键复验
 
-**产物**：`results/cifar_p12_lowcomp_step_key/`（含 `LOWCOMP_STEP_REPORT.md`）  
+**产物**：`results/cifar_p12_lowcomp_step_key/`（含 `LOWCOMP_STEP_REPORT.md`）
 **改动**：`target<=4` 时允许一步到目标；门禁仍 2pt。
 
 | target | iterative | search | delta (se−it) |
@@ -225,7 +227,7 @@ Test（摘录，search vs iterative）：
 
 ### 5.1 单 seed（历史）
 
-**产物**：`results/cifar_recovery_ablation/`  
+**产物**：`results/cifar_recovery_ablation/`
 **设定**：固定 2.01x Wanda 候选；各 3 epoch；单 seed。
 
 | Level | 方法 | 恢复后 best val | 备注 |
@@ -237,7 +239,7 @@ Test（摘录，search vs iterative）：
 
 ### 5.2 多 seed + test（Phase I.C）
 
-**产物**：`results/cifar_recovery_ablation_multiseed/`  
+**产物**：`results/cifar_recovery_ablation_multiseed/`
 **设定**：seeds 42/43/44；2.01x Wanda；各 3 epoch；冻结后 test。
 
 | Level | val mean±std | test mean±std | 备注 |

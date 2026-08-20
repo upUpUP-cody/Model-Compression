@@ -1,0 +1,33 @@
+# E1 One-shot sparsity curve (PDF Stage A)
+experiment_id: E1
+model:
+  path: /mnt/data/models/Qwen2.5-1.5B-Instruct
+  pdf_model: Qwen2.5-3B-Instruct
+  spec: proxy_1.5B
+  torch_dtype: float16
+
+# PDF: Wanda 10..70%; smoke subset + magnitude proxy for Wanda
+sparsity_grid: [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70]
+recovery: none
+
+evaluation:
+  max_seq_len: 256
+  validation_max_samples: 32
+  train_max_samples: 64
+  batch_size: 1
+
+hardware:
+  device: cuda:0
+  batch_size: 1
+
+logging:
+  output_root: /mnt/data2/results/E1_oneshot_sparsity_curve
+
+seed: 42
+
+dataset:
+  name: nyu-mll/glue
+  task: sst2
+  cache_dir: /mnt/data/datasets/glue
+  validation_fraction: 0.1
+  split_seed: 42

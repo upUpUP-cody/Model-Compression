@@ -1,0 +1,32 @@
+# E3 Compression Gap correlation (PDF Stage A)
+experiment_id: E3
+model:
+  path: /mnt/data/models/Qwen2.5-1.5B-Instruct
+  pdf_model: Qwen2.5-3B-Instruct
+  spec: proxy_1.5B
+  torch_dtype: float16
+
+child_sparsity: 0.50
+pool_max_samples: 64
+recovery: none
+
+evaluation:
+  max_seq_len: 256
+  validation_max_samples: 64
+  train_max_samples: 64
+
+hardware:
+  device: cuda:0
+  batch_size: 1
+
+logging:
+  output_root: /mnt/data2/results/E3_compression_gap
+
+seed: 42
+
+dataset:
+  name: nyu-mll/glue
+  task: sst2
+  cache_dir: /mnt/data/datasets/glue
+  validation_fraction: 0.1
+  split_seed: 42

@@ -1,0 +1,33 @@
+# E2 Iterative vs One-shot (PDF Stage A)
+experiment_id: E2
+model:
+  path: /mnt/data/models/Qwen2.5-1.5B-Instruct
+  pdf_model: Qwen2.5-3B-Instruct
+  spec: proxy_1.5B
+  torch_dtype: float16
+
+# PDF targets 40/50/60%; smoke 40% and 50%
+target_sparsities: [0.40, 0.50]
+iterative_steps: 4
+recovery: none
+
+evaluation:
+  max_seq_len: 256
+  validation_max_samples: 32
+  train_max_samples: 64
+
+hardware:
+  device: cuda:0
+  batch_size: 1
+
+logging:
+  output_root: /mnt/data2/results/E2_iterative_vs_oneshot
+
+seed: 42
+
+dataset:
+  name: nyu-mll/glue
+  task: sst2
+  cache_dir: /mnt/data/datasets/glue
+  validation_fraction: 0.1
+  split_seed: 42

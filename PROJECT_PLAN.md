@@ -1,42 +1,29 @@
 # Autonomous Lottery Ticket Discovery - 项目实施计划
 
-> 本文件是项目的完整长期路线图、阶段目标和全局成功标准。当前 P0/P1/P2 的执行顺序、研究协议和阶段验收条件见 [EXECUTION_PLAN.md](EXECUTION_PLAN.md)。详细实验结论见 [docs/WORK_LOG.md](docs/WORK_LOG.md) / [docs/WORK_LOG_BRIEF.md](docs/WORK_LOG_BRIEF.md)。
+> 本文件是长期路线图。**实验编号唯一标准**：[`docs/refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf`](docs/refs/Autonomous_Lottery_Ticket_Discovery_experiment_plan.pdf) §31（E0–E14）。执行表：[docs/EXPERIMENT_E_MAP.md](docs/EXPERIMENT_E_MAP.md)。日志按 E：[docs/WORK_LOG.md](docs/WORK_LOG.md)。交付：[docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md)。
 >
 > **更新状态（2026-08-20）**
 >
-> - **已完成**：MVP；MNIST / CIFAR P1.2；formal100 主表与 crossover 机制；Phase K0–K5 **SQuAD 管线**；KG.0–KG.6 **GLUE**；K6 预算对齐 + **LoRA Informal + LoRA formal**。
-> - **当前优先**：（1）**RQ4 必做** — Self vs External controller / Self-Governance（优先 GLUE 冒烟）；（2）论文口径收口 — CIFAR regime-dependent 主叙事 + KG.6/SQuAD 附录（主文范围仍待拍板）。见下方「相对研究纲领的口径」与 [docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md) · 交付页 [docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md)。
-> - **导师锁定（2026-08-20 更新）**：SQuAD **前先 GLUE**；SQuAD 难压属预期；**RQ4 必做**；**RQ3 排在 RQ4 之后**（不插队、非取消）。
-> - **不默认**：重跑 CIFAR formal100；宣称 search 系统全面更优；把 Informal/formal 升格 LLM 主表；在 RQ4 完成前插队做 E9。
-> - **主机**：1×RTX 4090（默认单卡；仅 Agent 判定需双卡拆任务时再加第 2 卡）；权重/数据 `/mnt/data`；LLM 运行产物 `/mnt/data2`。
-> - **资源告警**：加卡 / 配置优化触发标准见 [CLAUDE.md](CLAUDE.md)「LLM / GPU 与配置优化告知」。
+> - **纲领**：E0–E3 = `done_proxy`；下一步 **E8→E9**；E13 不插队。
+> - **Non-E 附录**：CIFAR formal100 regime-dependent；GLUE/SQuAD 过渡（不计 E 完成）。
+> - **主机**：1×RTX 4090；E 产物 `/mnt/data2/results/E*_*/`。
+> - 旧 Phase* / EVIDENCE_PACK / runners：[`archive/README.md`](archive/README.md)。
 
 ## 项目概述
 
 本项目旨在实现《Autonomous Lottery Ticket Discovery》方向的自主压缩搜索：物理结构化剪枝 + 可审计搜索 + 恢复，并在严格 train/val/test 协议下对照人工设计路径。
 
-**当前可投稿主证据**在视觉域：CIFAR-10 ResNet-18 上，同压缩预算下 search vs iterative 呈 **regime-dependent**（见 WORK_LOG / EVIDENCE_PACK）。LLM 侧已完成 GLUE→SQuAD 过渡；下一 LLM 科学目标按导师拍板：**先做 RQ4（Child 接任 Controller）**，**再做 RQ3（High-Gap / E9）**。
+**纲领主线**：E0–E14（PDF「项目/设置」报告）。**视觉附录（Non-E）**：CIFAR regime-dependent（详表见 `archive/docs/EVIDENCE_PACK.md`）。
 
-### 相对研究纲领的口径（PDF + 导师，2026-08-20）
+### 口径（仅 E ID）
 
-对照仓库内两份纲领 PDF（研究动机 / 实验执行表 E0–E14）与导师口头优先级：
+| 项 | 口径 |
+|----|------|
+| 执行顺序 | E0→E1→E2→E3→E8→E9→… |
+| E9 | High-Gap recovery — 第一批后半 |
+| E13 | Self vs external — Stage D，Gate 后 |
 
-| RQ / 主题 | 纲领原意 | 导师 / 本仓库口径 | 状态 |
-|-----------|----------|-------------------|------|
-| 任务顺序 | 可直接上 LLM 主基准 | **先 GLUE、后 SQuAD** | `[√]` 已执行且符合导师 |
-| SQuAD | 生成式主标准 | **难压属预期**；Informal/formal 附录，不扛 LLM 主表 | `[√]` 证据已有 |
-| RQ1 / Stage B | Compressibility Frontier / adaptive vs fixed | CIFAR **同预算 crossover** 作主文；LLM 仅过渡 | 视觉 `[√]` |
-| RQ2 | 损伤有结构 | GLUE/SQuAD 掉点差异作弱证据 | 部分 |
-| **RQ4** | Child 接任 Controller；Self vs External（E12–E13→E14） | **必做 · 下一档** | **未做 = 主缺口** |
-| **RQ3** | Parent 产 High-Gap / Synthetic Frontier（E9–E11） | **RQ4 之后做**（不插队） | **排队** |
-
-**近端路径（锁定）**：
-
-1. **下一实验档（必做）**：RQ4 最小矩阵（External controller=始终 M0 vs Self=当前 accepted Mt）；优先在 **1.5B + GLUE** 冒烟（SQuAD 已证明难压）。
-2. **RQ3 / E9**：仅 RQ4 有结论后再排；不插队。
-3. **投稿收口**：主文押 CIFAR（主文范围仍待拍板）；GLUE 过渡；SQuAD = 难压局限；不升格 LLM regime 主复现。
-4. **不做（默认）**：跳过 Gate 直接 E14 全自主多代；把「优于 Wanda 10%」当本期必达；RQ4 完成前插队 E9。
-
+**近端路径（锁定）**：审阅 E0–E3 → **E8→E9** → Gate 后再 Stage B/D。禁止把 Non-E 过渡表改贴成已完成 En。
 ---
 ## 阶段划分与实施步骤
 
@@ -442,7 +429,7 @@ search:
   - 20 epoch 基线约 88% val，非正式论文级精度
 
 #### 步骤 F.3: 复现论文实验 E1（Qwen / SQuAD）
-- **状态**: [未开始] **P3 规划占位，现阶段不实现**（启动门禁见下文 Phase J/K）
+- **状态**: [未开始] 对应纲领 **E0+**；入口见 E-MAP（勿用旧 Phase 记号）
 - **任务**: Dense Baseline 对比 (对应论文 Table 1)
 - **硬件需求**: [必须 GPU] **[必须 GPU ≥16GB，Qwen-0.5B 模型大，CPU 完全不可行]**
 - **实验配置**:
@@ -529,7 +516,7 @@ search:
 ### 时间估算
 - **最小可行版本 (MVP)**: 阶段 0 + A + B + C.1-C.2 + E → **已完成**
 - **视觉域完整证据 (P1+P2)**: MNIST + CIFAR P1.2 → **已完成**
-- **论文 LLM 复现**: 阶段 F.3–F.4 → 待 Phase J/K，约数周（视数据与显存）
+- **论文 LLM 复现**: 阶段 F.3–F.4 → 按 E0–E14；当前 E0–E3 proxy 已开
 - **扩展版本**: 阶段 G → 可选
 
 ### 技术难点预警
@@ -549,51 +536,39 @@ search:
 - [必须 GPU] **[必须 GPU]**: CPU 环境不可行，必须使用 GPU
 
 ### 当前硬件（RTX 4090 已可用）
-**已在本机/4090 完成的任务:**
-- [完成] 阶段 0–E：MVP 与 MNIST 路径
-- [完成] MNIST P1.2 GPU sweep
-- [完成] CIFAR ResNet-18 基线、P1.2 对照、sweep_v2、恢复消融
-- [完成] Level 2/3 恢复接口在 GPU/fp16 上的冒烟与消融
+**已完成:**
+- [完成] MVP / MNIST / CIFAR Non-E 正式全表
+- [完成] Stage A E0–E3 proxy（1.5B）
 
-**仍需规划 / 更大资源的任务:**
-- [必须 GPU] SQuAD/Qwen 实验 (必须 GPU ≥16GB) — **Phase J/K，现阶段不实现**
-- [√] 可选 CIFAR 100+ epoch 强基线再扫（Phase I 关键对照已完成）
+**下一档:**
+- [必须 GPU] **E8→E9**（Recovery / High-Gap）
+- [pending] E4–E7 / E10–E14（按 Gate；E13 不插队）
 
 ### 建议策略
-1. **近端**：Phase H 证据包装（文档），不新开长实验除非明确需要
-2. **已完成**：Phase I CIFAR 加固
-3. **LLM**：仅当 Phase H 审查通过且数据/显存就绪后进入 Phase K 实现
+1. **近端**：审阅 E0–E3 → 跑 **E8→E9**
+2. Gate 后再 Stage B/D
+3. Non-E 数字仅作附录，不改贴成 En
 
 ---
 
 ## 成功标准
 
-### 最低标准 (MVP)
-- [完成] Dense baseline 已具备 MNIST MLP 检查点；准确率已在 P1.2 中记录
-- [完成] One-shot / 结构化剪枝可执行，高压缩负结果保留
-- [完成] Level 1 恢复能在 CIFAR/MNIST 上显著拉回剪枝后精度
-- [完成] 端到端搜索循环可运行完整（含审计历史）
+### 最低标准 (MVP / Non-E 视觉)
+- [完成] Dense / one-shot / Level-1 恢复 / 端到端搜索可跑
+- [√] CIFAR formal100 regime-dependent（Non-E）
+- [×] search 系统全面优于 iterative
 
-### 视觉域目标标准 (P1 + P2，相对论文 LLM 目标的中间层)
-- [√] train/val/test 隔离协议在 MNIST 与 CIFAR 上可复现
-- [√] 同压缩预算下可比较 search vs iterative（CIFAR 1.5x–10x 正式全表）
-- [√] 物理结构化剪枝参数量可测（非掩码稀疏）
-- [√] 论文级 CIFAR 精度（100 epoch 正式基线 + 关键对照）— Phase I
-- [√] 压缩率 crossover 证据（≤4x iterative 略优/接近；≥8x search 同压缩更高）
-- [√] crossover 机制消融（10x=`path_and_gate`；8x=`gate_dominant`；4x=`inconclusive_close`）
-- [×] 证明 search **系统全面**优于 iterative — **当前证据不支持**（应为 regime-dependent）
+### 纲领目标（E0–E14）
 
-### 目标标准 (论文 LLM 复现 / 过渡)
-
-- [√] 先在 **GLUE 正式标准（SST-2 + RTE + QNLI）** 上给出同预算压缩对照信号（**KG.6**；导师：SQuAD 前先 GLUE）
-- [√] 再在 **SQuAD** 上给出可报告信号（LoRA formal；**难压属预期**；附录；禁止「剪枝优于 dense」）
-- [ ] **RQ4 最小矩阵（必做）**：External vs Self controller（优先 GLUE 冒烟；对应纲领 E12–E13）
-- [ ] **RQ3** High-Gap / Synthetic Frontier（E9–E11）— **排在 RQ4 之后**（不插队、非取消）
-- [ ] （非本期必达）同协议下相对外部 Wanda/IMP 的固定百分比优势 — 与 regime-dependent 叙事冲突时以 crossover 为准
+- [√] **E0–E3** proxy 落盘（须升级到 PDF 规格后再判 Gate A）
+- [ ] **E8–E9** 第一批后半
+- [ ] **E4–E7** Stage B（Gate A 后）
+- [ ] **E10–E11**（Gate B 相关）
+- [ ] **E12–E14** Stage D（E13 不插队；Gate E）
 
 ### 优秀标准 (超越当期)
 
-- [ ] E14 多代 lineage 全自主（仅当 RQ4 有信号后）
+- [ ] E14 多代 lineage 全自主（仅当 E12–E13 / Gate E 有信号后）
 - [ ] 在更多数据集 / 更大模型上验证 Self-Governance Frontier
 - [ ] 搜索时间与审计成本优化
 
@@ -607,7 +582,7 @@ search:
    - The Lottery Ticket Hypothesis (Frankle & Carbin, 2019)
    - Wanda: Pruning by Weights and Activations (Sun et al., 2023)
    - SparseGPT (Frantar & Alistarh, 2023)
-   - **用途**：相关工作不仅列引用，还要服务 **人工设计 baseline vs autonomous_search** 对照（调研短表 + 能复现则同预算实验）；**调研优先顶会/高引用权威工作**，详见 [`docs/PAPER_RESULTS_OUTLINE.md`](docs/PAPER_RESULTS_OUTLINE.md) §8 质量门禁、[`docs/PHASE_K_QWEN_PLAN.md`](docs/PHASE_K_QWEN_PLAN.md) K6-lit
+   - **用途**：人工设计 baseline vs autonomous_search 对照；调研短表见 `archive/docs/PAPER_RESULTS_OUTLINE.md` / `archive/docs/K6_LIT_BASELINE_SHORTLIST.md`
 
 ### 代码参考
 - PyTorch Pruning Tutorial: https://pytorch.org/tutorials/intermediate/pruning_tutorial.html
@@ -617,75 +592,42 @@ search:
 ### 数据集
 - MNIST: `torchvision.datasets.MNIST`
 - CIFAR-10: `torchvision.datasets.CIFAR10`
-- GLUE: https://gluebenchmark.com/（Phase K **正式标准**：SST-2 + RTE + QNLI；短文本闭集 NLU；冒烟仅用 SST-2）
-- SQuAD 2.0: https://rajpurkar.github.io/SQuAD-explorer/（长文阅读理解 / 抽答；**KG.5 门禁已通过，可开**小矩阵）
+- GLUE: https://gluebenchmark.com/（Non-E 过渡：SST-2 + RTE + QNLI）
+- SQuAD 2.0: https://rajpurkar.github.io/SQuAD-explorer/（Non-E 附录）
 
 ---
 
-## 后续大框架（Phase H / I / J / K）
+## 纲领实验框架（E0–E14 · 取代旧 Phase*）
 
-P0（搜索正确性）→ P1（MNIST P1.2）→ P2（CIFAR P1.2）**已完成**。后续不再从「阶段 0」起步，而按下列大框架推进。详细数字与「能写/不能写」见 [docs/WORK_LOG.md](docs/WORK_LOG.md)。
+唯一标准见 [docs/EXPERIMENT_E_MAP.md](docs/EXPERIMENT_E_MAP.md) 与 [docs/PDF_E_REQUIREMENTS_31_34.md](docs/PDF_E_REQUIREMENTS_31_34.md)。工作日志按 E：[docs/WORK_LOG.md](docs/WORK_LOG.md)。
 
 ```mermaid
 flowchart TD
-  done[P0_P1_P2_done] --> H[Phase_H_EvidencePack]
-  H --> I[Phase_I_Optional_CIFAR]
-  H --> J[Phase_J_Qwen_PlanOnly]
-  I --> J
-  J --> K[Phase_K_Implement_iff_gates]
+  A[Stage_A_E0_to_E3] --> C1[E8_E9_first_batch]
+  C1 --> B[Stage_B_E4_to_E7]
+  C1 --> C2[Stage_C_E10_E11]
+  B --> D[Stage_D_E12_to_E14]
+  C2 --> D
 ```
 
-### Phase H — 证据包装与论文叙事（近端默认下一步）
+| Stage | ID | 状态（2026-08-20） |
+|-------|-----|-------------------|
+| A | E0–E3 | done_proxy |
+| C 前半 | E8–E9 | 下一档 |
+| B | E4–E7 | pending（Gate A 后） |
+| C 余 | E10–E11 | pending |
+| D | E12–E14 | pending；E13 不插队 |
 
-- **状态**：[完成] 已交付 [`docs/EVIDENCE_PACK.md`](docs/EVIDENCE_PACK.md)
-- **性质**：文档为主，不默认新开长实验
-- **内容**：
-  - 从 WORK_LOG / sweep_v2 / 消融抽出协议图、同压缩表、负结果（oneshot 崩溃、search ≥4x 欠压）
-  - 固化「能写 / 不能写」清单（与 WORK_LOG §3 一致）
-- **产出**：证据索引 + 论文方法/实验/讨论提纲
-- **验收**：读者仅凭文档能复述协议与主结论，且不把欠压 search 与高压缩 iterative 混比
-
-### Phase I — CIFAR 加固（含正式全表，已完成）
-
-- [√] 高压缩同预算：增量逼近 + 过冲硬顶（I.A / I.A′）；sweep_v3 + outlier 短验证
-- [√] 更强基线（100 epoch）+ 关键对照 2x/10x × 3 seed（I.B）
-- [√] 恢复消融多 seed + test（I.C）
-- [√] **正式全表**：`formal100` × 1.5–10x × 3 seed（`results/cifar_p12_comparison_gpu_formal100_full/`）
-- [√] crossover 机制消融 10x（`path_and_gate`）+ 8x（`gate_dominant`）+ 4x 低压缩诊断（`inconclusive_close`）
-- [×] 勾选「search 系统全面优于 iterative」— **不做**（regime-dependent；全表仍是 crossover）
-- **不阻塞** Phase H；也不自动启动 Qwen 实现
-- 证据已写入 [`docs/EVIDENCE_PACK.md`](docs/EVIDENCE_PACK.md) / [`docs/WORK_LOG.md`](docs/WORK_LOG.md)
-
-### Phase J — Qwen/SQuAD 规划占位（对齐 P2.9，默认不写代码）
-
-- **状态**：[√] 规划文档已交付 [`docs/PHASE_J_QWEN_PLAN.md`](docs/PHASE_J_QWEN_PLAN.md)
-- 剪枝单元：attention head / FFN 中间维
-- 指标：F1 / EM；硬件：VRAM ≥16GB
-- **启动门禁**：Phase H 证据包审查通过 + 数据与显存就绪
-- **磁盘**：实现前须先提醒用户扩盘（Qwen 权重/缓存/多次 run 通常还需 **30G+** 空闲）
-- 本阶段只写接口草图与实验矩阵，**不实现** Transformer 剪枝 / SQuAD pipeline；**不下载**权重
-
-### Phase K — LLM 实现（过渡 `[√]`；下一档 = RQ4）
-
-- 执行计划：[docs/PHASE_K_QWEN_PLAN.md](docs/PHASE_K_QWEN_PLAN.md)（**§1.1 任务区分**；**§RQ 优先级**）
-- 模型锁定：`Qwen2.5-1.5B-Instruct`；大文件：`/mnt/data`（结果：`/mnt/data2`）
-- [√] K0–K5 管线；KG.5 门禁；**KG.6 预算对齐 GLUE**（导师：SQuAD 前先 GLUE）
-- [√] K6 小扫 + SGD 负对照 + LoRA Informal/formal（SQuAD **难压属预期**；附录）
-- [√] K6-lit 短表
-- [ ] **RQ4（必做）**：External vs Self controller 最小矩阵（优先 GLUE；E12–E13）
-- [ ] **RQ3**：E9–E11 — 仅 RQ4 之后
-- [ ] 论文口径收口；不升格 LLM 主表；不预设 search 全面更优
+Non-E（CIFAR / GLUE / SQuAD）数字见 WORK_LOG Non-E 与 MENTOR_DELIVERY；历史详表在 `archive/docs/EVIDENCE_PACK.md`。
 
 ---
 
 ## 下一步行动
 
-1. [√] formal100 全表 + 机制链；叙事定稿为 **regime-dependent**；「系统全面更优」仍 `[×]`
-2. [√] 预算对齐、一步复验与 4x 诊断
-3. [√] Phase J / PAPER_RESULTS_OUTLINE / Phase K 过渡（GLUE→SQuAD）
-4. [√] K6 LoRA formal
-5. **下一实验档（必做）**：**RQ4**（Self-Governance / External vs Self）；优先 GLUE 冒烟
-6. **其后**：**RQ3** High-Gap / E9（不插队）
-7. **并行**：论文口径收口（主文范围仍待拍板）
+1. [√] Non-E CIFAR formal100 → regime-dependent
+2. [√] E0–E3 proxy 落盘
+3. **下一档**：**E8→E9**
+4. Gate 后再 Stage B / D；不启动 E13
+5. 主文是否只押 CIFAR（Non-E）仍待拍板
 
-执行顺序与验收细节仍以 [EXECUTION_PLAN.md](EXECUTION_PLAN.md) 与 [docs/P2_EXECUTION_PLAN.md](docs/P2_EXECUTION_PLAN.md) 为准；实验结论以 WORK_LOG 为准；写论文以 PAPER_RESULTS_OUTLINE 为准；LLM 以 PHASE_K_QWEN_PLAN 为准；交付表以 [docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md) 为准。
+执行与结论以 [docs/EXPERIMENT_E_MAP.md](docs/EXPERIMENT_E_MAP.md) / [docs/WORK_LOG.md](docs/WORK_LOG.md) / [docs/MENTOR_DELIVERY.md](docs/MENTOR_DELIVERY.md) 为准。旧 Phase* / EXECUTION_PLAN 仅在 `archive/`。

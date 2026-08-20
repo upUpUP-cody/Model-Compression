@@ -16,11 +16,11 @@ from src.pruning.pruning_backend import resolve_pruning_backend
 RESNET_CFG = {"type": "resnet_cifar", "num_classes": 10, "base_width": 64}
 CONV1_NAMES = {f"layer{stage}.{block}.conv1" for stage in range(1, 5) for block in range(2)}
 CIFAR_TARGET_CONFIGS = [
-    "configs/cifar_p12_gpu_study.yaml",
-    "configs/cifar_p12_gpu_multiseed.yaml",
-    "configs/cifar_p12_gpu_sweep.yaml",
-    "configs/cifar_p12_gpu_smoke.yaml",
-    "configs/cifar_recovery_ablation.yaml",
+    "archive/configs_legacy/cifar_p12_gpu_study.yaml",
+    "archive/configs_legacy/cifar_p12_gpu_multiseed.yaml",
+    "archive/configs_legacy/cifar_p12_gpu_sweep.yaml",
+    "archive/configs_legacy/cifar_p12_gpu_smoke.yaml",
+    "archive/configs_legacy/cifar_recovery_ablation.yaml",
 ]
 
 

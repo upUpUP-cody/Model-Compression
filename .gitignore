@@ -184,6 +184,9 @@ checkpoints/
 
 # Project-specific
 *.pdf
+!docs/refs/
+!docs/refs/*.pdf
+!docs/refs/**/*.pdf
 
 # Data directories
 data/
