@@ -1,4 +1,4 @@
-# E1 One-shot sparsity curve — formal Qwen2.5-3B (base, NOT Instruct)
+# E1 shard GPU1 — 50/60/70% (dual-GPU 3+3; launch script sets --sparsities)
 experiment_id: E1
 model:
   path: /mnt/data/models/Qwen2.5-3B
@@ -23,6 +23,9 @@ evaluation:
     seed: 42
     batch_size: 8
     bootstrap_iters: 0
+    # Resume-safe only: running process ignores YAML changes. If GPU1 is restarted,
+    # skip Code here; GPU0 code-patch runner fills Code after E0 gate.
+    skip_dimensions: [Code]
     scan_limits:
       PPL: 4
       Math: 64
@@ -41,7 +44,7 @@ hardware:
   batch_size: 8
 
 logging:
-  output_root: /mnt/data2/results/E1_oneshot_sparsity_curve
+  output_root: /mnt/data2/results/E1_oneshot_sparsity_curve_shard_gpu1
 
 seed: 42
 

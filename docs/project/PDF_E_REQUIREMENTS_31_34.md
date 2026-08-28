@@ -100,6 +100,7 @@ PDF 原话要点：第一阶段甚至**完全不需要 Agent**。
 | Model | Qwen2.5-3B-Instruct |
 | Compression | None |
 | Evaluation | PPL + Math + Knowledge + Reasoning + Instruction + Code |
+| 本仓库实现 | lm_eval 标准小样本六维 `mode=scan`（wikitext/gsm8k/mmlu/bbh/ifeval/humaneval；冻结 limit+seed=42；见 checklist） |
 | Seeds / GPU | 1 / 1×24GB |
 | 输出 | Dense performance vector P(M0)；GPU memory；latency；parameter count；model size |
 | 成功条件 | 所有 benchmark pipeline 可稳定复现 |
@@ -109,11 +110,20 @@ PDF 原话要点：第一阶段甚至**完全不需要 Agent**。
 
 | 项 | PDF 要求 |
 |----|----------|
+| Model | Qwen2.5-3B（base，非 Instruct） |
 | Method | Wanda |
 | Sparsity | 10%…70%（步长 10%） |
 | Recovery | None |
 | 核心图 | performance vs sparsity |
 | 成功条件 | 明显非线性 degradation / **capability-specific** degradation（不同能力不同 cliff） |
+
+| 项 | 本仓库实现（已对齐，未开跑） |
+|----|------------------------------|
+| Model | `formal_3B_base` → `/mnt/data/models/Qwen2.5-3B` |
+| Method | **Wanda** MLP structured（[`wanda_importance_mlp`](../src/experiments/qwen_k5_comparison.py) + [`prune_mlp_wanda`](../src/experiments/stage_a_common.py)） |
+| Evaluation | 六维 scan（同 E0）；每档 sparsity 的 P(s) + Delta vs **base 3B dense** |
+| Runner / Config | [`run_e1_oneshot_curve.py`](../experiments/stage_a/run_e1_oneshot_curve.py) / [`e1_oneshot_curve.yaml`](../configs/stage_a/e1_oneshot_curve.yaml) |
+| 禁止 | 用 E0 Instruct 向量作 E1 Delta；用 Instruct 权重冒充 base |
 
 ### E2 Iterative vs One-shot（P0）
 

@@ -1,25 +1,19 @@
 # Experiment E map（唯一标准 · PDF §31）
 
-强制顺序：**E0 → E1 → E2 → E3**，再第一批 **E8 → E9**，然后按 Gate 进入 Stage B / D。
+强制顺序：**一次一个 E**。  
+核对：[../process/PDF_SETUP_CHECKLIST.md](../process/PDF_SETUP_CHECKLIST.md)
 
-- 排版：[E_REPORT_TEMPLATE.md](E_REPORT_TEMPLATE.md)
-- 结构：[STRUCTURE.md](STRUCTURE.md)
-- **§31–34**：[PDF_E_REQUIREMENTS_31_34.md](PDF_E_REQUIREMENTS_31_34.md)
-- 日志：[WORK_LOG.md](WORK_LOG.md)（按 E ID）
+**模型**：E0 = **Qwen2.5-3B-Instruct**；E1/E2 = **Qwen2.5-3B**（base，非 Instruct）。二者不得混用。
 
-PDF 默认模型：**Qwen2.5-3B-Instruct**。当前磁盘仅 **1.5B** → Stage A 标注 `spec: proxy_1.5B`。
-
-| E | PDF 目的 | Stage | 状态 | 产物目录 |
-|---|----------|-------|------|----------|
-| E0 | Dense baseline | A | done_proxy | `/mnt/data2/results/E0_dense_baseline/` · [results](../results/) |
-| E1 | One-shot sparsity curve | A | done_proxy | `/mnt/data2/results/E1_oneshot_sparsity_curve/` |
-| E2 | Iterative vs one-shot | A | done_proxy | `/mnt/data2/results/E2_iterative_vs_oneshot/` |
-| E3 | Compression Gap | A | done_proxy | `/mnt/data2/results/E3_compression_gap/` |
-| E4–E7 | Adaptive search | B | pending | — |
-| E8 | Random recovery | C | **partial_smoke**（n=256/seed42/steps30） | `/mnt/data2/results/E8_random_recovery/` |
-| E9 | High-Gap recovery | C | pending | — |
-| E10–E11 | Frontier data | C | pending | — |
-| E12–E14 | Self-compression | D | pending | **禁止插队** |
+| E | PDF 目的 | Model（PDF） | 状态 | 产物 |
+|---|----------|--------------|------|------|
+| E0 | Dense baseline | 3B-Instruct | **done** | `/mnt/data2/results/E0_dense_baseline/` |
+| E1 | One-shot curve | 3B base | **done** | `/mnt/data2/results/E1_oneshot_sparsity_curve/` |
+| E2 | Iterative vs one-shot | 3B base | **pending patch→resume（1024）** | `/mnt/data2/results/E2_iterative_vs_oneshot/` |
+| E3 | Compression Gap | | pending | — |
+| E8 | Random recovery | | pending（E3 后） | — |
+| E9 | High-Gap recovery | | pending | — |
+| E4–E7 / E10–E14 | | | pending | 禁止插队 |
 
 ## Gates（§32）
 
@@ -27,18 +21,25 @@ PDF 默认模型：**Qwen2.5-3B-Instruct**。当前磁盘仅 **1.5B** → Stage 
 |------|------|----------|
 | A | E1/E2 | 暂缓 Agent |
 | B | E3/E9 | 放弃 Frontier 数据主线 |
-| C | E5–E7 | 可不做复杂 controller |
-| D | E11 | synthetic 仅 optional |
-| E | E13 | 不声称完全 self-compressing |
 
-## Non-E（勿迁入 E* 目录）
+## E1 对齐摘要
 
-| 工作 | 路径 |
-|------|------|
-| CIFAR formal100 | `results/cifar_p12_*`；详表见 `archive/docs/EVIDENCE_PACK.md` |
-| GLUE 过渡 | `/mnt/data2/results/qwen_glue_*` |
-| SQuAD LoRA | `/mnt/data2/results/qwen_k6_*` |
+- **Sparsity**：10%–70%，步长 10%
+- **Method**：**Wanda**（MLP intermediate；`||W_gate|| × mean(|h_i|)`；校准 SST-2 train LM）
+- **Evaluation**：六维 scan（同 E0）；Delta vs **base 3B dense**（非 E0 Instruct）；Reasoning **max_gen_toks=1024**；eval batch=4
+- **Runner**：`experiments/stage_a/run_e1_oneshot_curve.py`
+- **Config**：`configs/stage_a/e1_oneshot_curve.yaml`
+- **开跑前**：下载 `/mnt/data/models/Qwen2.5-3B`
 
-## 下一步
+## E2 对齐摘要
 
-审阅 E0–E3 → 执行入口 [`../process/NEXT_E8_E9.md`](../process/NEXT_E8_E9.md)；不启动 E13。
+- **Targets**：40% / 50% / 60%；**5% incremental**（累计 +5pp）vs oneshot；Recovery None
+- **Seeds**：42 / 43 / 44；seed=42 oneshot **从 E1 导入**；eval harness seed 固定 42
+- **Evaluation**：六维 scan（同 E1，含 Reasoning 1024）；Delta vs base 3B dense
+- **GPU**：双卡多进程 — GPU0=`42,43`，GPU1=`44`；`launch_e2_dual.sh` + `e2_dual_merge_when_done.sh`
+- **断点续传**：`e2_checkpoint.json`（cell + 维级 partial）；默认 `--resume`
+- **Runner / Config**：`experiments/stage_a/run_e2_iterative_vs_oneshot.py` / `configs/stage_a/e2_iterative_vs_oneshot.yaml`
+
+## 当前步
+
+**E1 Reasoning 1024 已齐**（`bbh1024_e1_complete.flag`；正式表禁止 2048）。下一步：E2 Reasoning sync（`run_e2_reasoning_patch`）→ `bbh1024_protocol_locked.flag` → `launch_e2_dual.sh` resume。**E0 Instruct 永不进入 Gate A**。

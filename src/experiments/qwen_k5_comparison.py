@@ -56,7 +56,7 @@ def magnitude_importance_mlp(
     max_layers: int | None = 2,
 ) -> Dict[str, torch.Tensor]:
     """Amplitude importance on MLP intermediate dims only (K5 smoke default)."""
-    del dataloader, device  # unused; magnitude is weight-only
+    del dataloader, device, backend  # unused; magnitude is weight-only
     pruner = TransformerStructuredPruning(model)
     names = mlp_only_layer_names(model)
     if max_layers is not None:
@@ -71,6 +71,104 @@ def magnitude_importance_mlp(
         importance[name] = scores
     if not importance:
         raise ValueError("no MLP intermediate layers found for magnitude importance")
+    return importance
+
+
+def wanda_importance_mlp(
+    model: nn.Module,
+    dataloader: DataLoader,
+    device: str,
+    *,
+    num_batches: int = 4,
+    max_layers: int | None = None,
+) -> Dict[str, torch.Tensor]:
+    """Wanda scores on Qwen MLP intermediate dims: ||W_gate[i,:]||_2 * mean(|h_i|).
+
+    h_i is the down_proj input (SiLU(gate)*up) at intermediate dimension i.
+    """
+    if isinstance(num_batches, bool) or not isinstance(num_batches, int) or num_batches <= 0:
+        raise ValueError("num_batches must be a positive integer")
+
+    pruner = TransformerStructuredPruning(model)
+    names = mlp_only_layer_names(model)
+    if max_layers is not None:
+        names = names[-int(max_layers) :]
+    if not names:
+        raise ValueError("no MLP intermediate layers found for Wanda importance")
+
+    activation_sums: Dict[str, torch.Tensor] = {}
+    token_counts: Dict[str, int] = {}
+    hooks = []
+    resolved = resolve_device(device)
+    non_blocking = resolved.type == "cuda"
+    was_training = model.training
+    model.eval()
+    model.to(resolved)
+
+    def _accumulate(layer_name: str, tensor: torch.Tensor) -> None:
+        values = tensor.detach().abs()
+        if values.ndim == 3:
+            batch_sum = values.sum(dim=(0, 1))
+            count = int(values.shape[0] * values.shape[1])
+        elif values.ndim == 2:
+            batch_sum = values.sum(dim=0)
+            count = int(values.shape[0])
+        else:
+            raise ValueError(f"expected 2D or 3D MLP activations for {layer_name}, got {values.ndim}D")
+        if layer_name not in activation_sums:
+            activation_sums[layer_name] = batch_sum.clone()
+            token_counts[layer_name] = count
+        else:
+            activation_sums[layer_name].add_(batch_sum)
+            token_counts[layer_name] += count
+
+    try:
+        for name in names:
+            kind, index = pruner._parse_name(name)
+            if kind != "mlp":
+                continue
+            mlp = pruner.base.layers[index].mlp
+
+            def make_pre_hook(layer_name: str):
+                def hook(_module: nn.Module, inputs: tuple) -> None:
+                    _accumulate(layer_name, inputs[0])
+                return hook
+
+            hooks.append(mlp.down_proj.register_forward_pre_hook(make_pre_hook(name)))
+
+        batch_count = 0
+        with torch.no_grad():
+            for batch in dataloader:
+                if batch_count >= num_batches:
+                    break
+                input_ids = batch["input_ids"].to(resolved, non_blocking=non_blocking)
+                attention_mask = batch.get("attention_mask")
+                if attention_mask is not None:
+                    attention_mask = attention_mask.to(resolved, non_blocking=non_blocking)
+                model(input_ids=input_ids, attention_mask=attention_mask)
+                batch_count += 1
+
+        if batch_count == 0:
+            raise ValueError("dataloader must yield at least one batch for Wanda calibration")
+    finally:
+        for hook in hooks:
+            hook.remove()
+        model.train(was_training)
+
+    importance: Dict[str, torch.Tensor] = {}
+    for name in names:
+        kind, index = pruner._parse_name(name)
+        if kind != "mlp":
+            continue
+        mlp = pruner.base.layers[index].mlp
+        weight_mag = torch.norm(mlp.gate_proj.weight.detach(), p=2, dim=1).float().cpu()
+        mean_act = (activation_sums[name] / max(token_counts[name], 1)).float().cpu()
+        if mean_act.numel() != weight_mag.numel():
+            raise ValueError(
+                f"activation width mismatch for {name}: {mean_act.numel()} vs {weight_mag.numel()}"
+            )
+        importance[name] = weight_mag * mean_act
+
     return importance
 
 

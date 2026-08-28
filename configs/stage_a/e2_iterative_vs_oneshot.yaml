@@ -1,24 +1,50 @@
-# E2 Iterative vs One-shot (PDF Stage A)
+# E2 Iterative vs One-shot (PDF Stage A) — Qwen2.5-3B base
+# Evaluation.capability must match E1 byte-for-byte (see tests/test_e2_eval_alignment.py).
 experiment_id: E2
 model:
-  path: /mnt/data/models/Qwen2.5-3B-Instruct
-  pdf_model: Qwen2.5-3B-Instruct
-  spec: formal_3B
+  path: /mnt/data/models/Qwen2.5-3B
+  pdf_model: Qwen2.5-3B
+  spec: formal_3B_base
   torch_dtype: float16
 
-# PDF targets 40/50/60%; smoke 40% and 50%
-target_sparsities: [0.40, 0.50]
-iterative_steps: 4
+target_sparsities: [0.40, 0.50, 0.60]
+incremental_step_sparsity: 0.05
 recovery: none
+seeds: [42, 43, 44]
+success_min_wins: 7
+
+e1_oneshot_checkpoint: /mnt/data2/results/E1_oneshot_sparsity_curve/e1_checkpoint.json
+
+pruning:
+  method: wanda
+  wanda_batches: 4
+  calibration:
+    max_seq_len: 256
+    train_max_samples: 128
+    batch_size: 1
 
 evaluation:
-  max_seq_len: 256
-  validation_max_samples: 32
-  train_max_samples: 64
+  capability:
+    mode: scan
+    seed: 42
+    batch_size: 8
+    bootstrap_iters: 0
+    scan_limits:
+      PPL: 4
+      Math: 64
+      Knowledge: 128
+      Reasoning: 64
+      Instruction: 64
+      Code: 32
+    dimensions:
+      Reasoning:
+        gen_kwargs:
+          max_gen_toks: 1024
+          do_sample: false
 
 hardware:
   device: cuda:0
-  batch_size: 1
+  batch_size: 8
 
 logging:
   output_root: /mnt/data2/results/E2_iterative_vs_oneshot

@@ -1,21 +1,18 @@
-# E0 Dense baseline — formal Qwen2.5-3B-Instruct
-experiment_id: E0
+# BBH Reasoning max_gen_toks=1024 calibration (base 3B dense, E1-aligned limits)
+experiment_id: BBH1024_CALIB
 model:
-  path: /mnt/data/models/Qwen2.5-3B-Instruct
-  pdf_model: Qwen2.5-3B-Instruct
-  spec: formal_3B
+  path: /mnt/data/models/Qwen2.5-3B
+  pdf_model: Qwen2.5-3B
+  spec: formal_3B_base
   torch_dtype: float16
-
-hardware:
-  device: cuda:0
-  batch_size: 1
 
 evaluation:
   capability:
     mode: scan
     seed: 42
-    batch_size: 1
+    batch_size: 2
     bootstrap_iters: 0
+    only_dimensions: [Reasoning]
     scan_limits:
       PPL: 4
       Math: 64
@@ -29,7 +26,11 @@ evaluation:
           max_gen_toks: 1024
           do_sample: false
 
+hardware:
+  device: cuda:0
+  batch_size: 2
+
 logging:
-  output_root: /mnt/data2/results/E0_dense_baseline
+  output_root: /mnt/data2/results/bbh_maxtok1024_calib
 
 seed: 42
