@@ -9,7 +9,7 @@
 |---|----------|--------------|------|------|
 | E0 | Dense baseline | 3B-Instruct | **done** | `/mnt/data2/results/E0_dense_baseline/` |
 | E1 | One-shot curve | 3B base | **done** | `/mnt/data2/results/E1_oneshot_sparsity_curve/` |
-| E2 | Iterative vs one-shot | 3B base | **pending patch→resume（1024）** | `/mnt/data2/results/E2_iterative_vs_oneshot/` |
+| E2 | Iterative vs one-shot | 3B base | **done (Gate A FAIL — 暂缓 Agent)** | `/mnt/data2/results/E2_iterative_vs_oneshot/` |
 | E3 | Compression Gap | | pending | — |
 | E8 | Random recovery | | pending（E3 后） | — |
 | E9 | High-Gap recovery | | pending | — |
@@ -26,7 +26,7 @@
 
 - **Sparsity**：10%–70%，步长 10%
 - **Method**：**Wanda**（MLP intermediate；`||W_gate|| × mean(|h_i|)`；校准 SST-2 train LM）
-- **Evaluation**：六维 scan（同 E0）；Delta vs **base 3B dense**（非 E0 Instruct）；Reasoning **max_gen_toks=1024**；eval batch=4
+- **Evaluation**：六维 scan（同 E0）；Delta vs **base 3B dense**（非 E0 Instruct）；Reasoning **max_gen_toks=1024**；eval batch=16（OOM 16→8→4→2→1）
 - **Runner**：`experiments/stage_a/run_e1_oneshot_curve.py`
 - **Config**：`configs/stage_a/e1_oneshot_curve.yaml`
 - **开跑前**：下载 `/mnt/data/models/Qwen2.5-3B`
@@ -35,11 +35,11 @@
 
 - **Targets**：40% / 50% / 60%；**5% incremental**（累计 +5pp）vs oneshot；Recovery None
 - **Seeds**：42 / 43 / 44；seed=42 oneshot **从 E1 导入**；eval harness seed 固定 42
-- **Evaluation**：六维 scan（同 E1，含 Reasoning 1024）；Delta vs base 3B dense
-- **GPU**：双卡多进程 — GPU0=`42,43`，GPU1=`44`；`launch_e2_dual.sh` + `e2_dual_merge_when_done.sh`
+- **Evaluation**：六维 scan（同 E1，含 Reasoning 1024）；Delta vs base 3B dense；eval batch=16
+- **GPU**：双卡多进程均衡 — GPU0=`42,44`，GPU1=`43`；`launch_e2_dual_balanced.sh` + `e2_dual_merge_when_done.sh`（旧 `launch_e2_dual.sh` 为 42+43/44）
 - **断点续传**：`e2_checkpoint.json`（cell + 维级 partial）；默认 `--resume`
 - **Runner / Config**：`experiments/stage_a/run_e2_iterative_vs_oneshot.py` / `configs/stage_a/e2_iterative_vs_oneshot.yaml`
 
 ## 当前步
 
-**E1 Reasoning 1024 已齐**（`bbh1024_e1_complete.flag`；正式表禁止 2048）。下一步：E2 Reasoning sync（`run_e2_reasoning_patch`）→ `bbh1024_protocol_locked.flag` → `launch_e2_dual.sh` resume。**E0 Instruct 永不进入 Gate A**。
+**E2 已结束**：Gate A passed=False wins=1/9。下一步按 PDF 进入 E3（仅当 Gate A 通过）。**E0 Instruct 永不进入 Gate A**。

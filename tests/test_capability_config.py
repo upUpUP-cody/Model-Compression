@@ -59,7 +59,10 @@ def test_e0_e1_model_paths_isolated():
     assert "Instruct" not in str(e2["model"]["path"])
     r0 = resolve_capability_config(e0)
     r1 = resolve_capability_config(e1)
+    r2 = resolve_capability_config(e2)
     assert r0["dimensions"]["Reasoning"]["gen_kwargs"]["max_gen_toks"] == 1024
     assert r1["dimensions"]["Reasoning"]["gen_kwargs"]["max_gen_toks"] == 1024
+    assert r2["dimensions"]["Reasoning"]["gen_kwargs"]["max_gen_toks"] == 1024
     assert r0["batch_size"] == 1
-    assert r1["batch_size"] == 8
+    assert r1["batch_size"] == 16
+    assert r2["batch_size"] == 16

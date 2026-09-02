@@ -21,7 +21,7 @@ evaluation:
   capability:
     mode: scan
     seed: 42
-    batch_size: 8
+    batch_size: 16
     bootstrap_iters: 0
     # Resume-safe only: running process ignores YAML changes. If GPU1 is restarted,
     # skip Code here; GPU0 code-patch runner fills Code after E0 gate.
@@ -41,7 +41,7 @@ evaluation:
 
 hardware:
   device: cuda:0
-  batch_size: 8
+  batch_size: 16
 
 logging:
   output_root: /mnt/data2/results/E1_oneshot_sparsity_curve_shard_gpu1

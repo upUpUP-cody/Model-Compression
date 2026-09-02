@@ -9,6 +9,8 @@ export HF_HUB_CACHE=/mnt/data/hf/hub
 # Mainland mirror; override to https://huggingface.co if needed.
 export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 export HF_ALLOW_CODE_EVAL=1
+# Reduce CUDA allocator fragmentation during long lm-eval cascades (batch fallback).
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 export LLM_DATA_ROOT=/mnt/data
 export LLM_MODEL_DIR=/mnt/data/models/Qwen2.5-3B-Instruct

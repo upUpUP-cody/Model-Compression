@@ -902,25 +902,46 @@ def compare_iterative_vs_oneshot(
     main_dims: Sequence[str] = E2_MAIN_DIMS,
     win_threshold: int = 3,
 ) -> Dict[str, Any]:
-    """Per-dim winners + cell win if iterative better on >= win_threshold main dims."""
+    """Per-dim winners + cell label from main dims only (Instruction/Code ignored).
+
+    Cell labels (main four, threshold default 3/4):
+    - ``iterative``: iterative wins ≥ threshold main dims
+    - ``oneshot``: oneshot wins ≥ threshold main dims
+    - ``tie``: neither reaches threshold (split / ties on main dims)
+
+    Dim-level ``tie`` means equal scores on that dim (not the same as cell ``tie``).
+    """
     winner_per_dim: Dict[str, str] = {}
     main_wins = 0
+    main_oneshot_wins = 0
+    main_set = set(main_dims)
     for dim in DIM_ORDER:
         better = dim_better_iterative(dim, oneshot_vector.get(dim), iterative_vector.get(dim))
         if better is True:
             winner_per_dim[dim] = "iterative"
-            if dim in main_dims:
+            if dim in main_set:
                 main_wins += 1
         elif better is False:
             winner_per_dim[dim] = "oneshot"
+            if dim in main_set:
+                main_oneshot_wins += 1
         else:
             winner_per_dim[dim] = "tie"
-    cell_iterative_win = main_wins >= int(win_threshold)
+    thr = int(win_threshold)
+    if main_wins >= thr:
+        cell_winner = "iterative"
+    elif main_oneshot_wins >= thr:
+        cell_winner = "oneshot"
+    else:
+        cell_winner = "tie"
+    cell_iterative_win = cell_winner == "iterative"
     return {
         "winner_per_dim": winner_per_dim,
         "main_dim_iterative_wins": main_wins,
+        "main_dim_oneshot_wins": main_oneshot_wins,
+        "cell_winner": cell_winner,
         "cell_iterative_win": cell_iterative_win,
-        "win_threshold": int(win_threshold),
+        "win_threshold": thr,
         "main_dims": list(main_dims),
     }
 

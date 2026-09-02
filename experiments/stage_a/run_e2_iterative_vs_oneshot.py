@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import gc
 import sys
 import time
 from pathlib import Path
@@ -102,6 +103,19 @@ def _write_ckpt(
     save_e2_checkpoint(ckpt_path, payload)
 
 
+def _cuda_oom_cleanup() -> None:
+    """Release fragmented CUDA workspace after an OOM so smaller-batch retry can fit."""
+    gc.collect()
+    if torch.cuda.is_available():
+        try:
+            torch.cuda.synchronize()
+        except Exception:
+            pass
+        torch.cuda.empty_cache()
+        gc.collect()
+        torch.cuda.empty_cache()
+
+
 def _eval_capability_with_batch_fallback(
     model_path: str,
     dim_config: Dict[str, Any],
@@ -109,11 +123,15 @@ def _eval_capability_with_batch_fallback(
     model,
     tokenizer,
 ) -> Dict[str, Any]:
-    """Try configured batch (formal=8), then 4, then 2 on CUDA OOM."""
+    """Try configured batch (formal=16), then 8→4→2→1 on CUDA OOM.
+
+    MMLU (Knowledge) few-shot loglikelihood can OOM even at batch=2 on 24GB when
+    activation length is large; cascade must include batch=1.
+    """
     cap0 = (dim_config.get("evaluation") or {}).get("capability") or {}
-    primary = int(cap0.get("batch_size") or dim_config.get("hardware", {}).get("batch_size") or 8)
+    primary = int(cap0.get("batch_size") or dim_config.get("hardware", {}).get("batch_size") or 16)
     cascade: List[int] = []
-    for bs in (primary, 8, 4, 2):
+    for bs in (primary, 8, 4, 2, 1):
         if bs not in cascade:
             cascade.append(bs)
     last_exc: Optional[Exception] = None
@@ -130,11 +148,10 @@ def _eval_capability_with_batch_fallback(
                 raise
             last_exc = exc
             nxt = cascade[idx + 1] if idx + 1 < len(cascade) else None
+            _cuda_oom_cleanup()
             if nxt is None:
                 break
-            print(f"[WARNING] E2 batch={bs} OOM; retrying batch={nxt}: {exc}")
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            print(f"[WARNING] E2 batch={bs} OOM; retrying batch={nxt}: {exc}", flush=True)
     assert last_exc is not None
     raise last_exc
 
@@ -323,28 +340,62 @@ def _build_report(
     status = "smoke" if smoke else ("done" if pairs else "aligned_not_run")
 
     table = [
-        "| Seed | Target | One-shot PPL | Iterative PPL | Main wins (iter) | Cell winner |",
-        "|------|--------|--------------|---------------|------------------|-------------|",
+        "| Seed | Target | One-shot PPL | Iterative PPL | Main iter | Main oneshot | Six wins (iter) | Cell (主四维) |",
+        "|------|--------|--------------|---------------|-----------|--------------|-----------------|--------------|",
     ]
+    detail_blocks: list[str] = []
     for p in pairs:
         o = p["oneshot"]["vector"]
         i = p["iterative"]["vector"]
-        w = "iterative" if p["cell_iterative_win"] else "oneshot/tie"
+        winners = p.get("winner_per_dim") or {}
+        main_dims = list(p.get("main_dims") or ("PPL", "Math", "Knowledge", "Reasoning"))
+        six_wins = sum(1 for d in DIM_ORDER if winners.get(d) == "iterative")
+        main_iter = int(p.get("main_dim_iterative_wins") or 0)
+        main_one = int(
+            p.get("main_dim_oneshot_wins")
+            if p.get("main_dim_oneshot_wins") is not None
+            else sum(1 for d in main_dims if winners.get(d) == "oneshot")
+        )
+        thr = int(p.get("win_threshold") or 3)
+        if p.get("cell_winner") in ("iterative", "oneshot", "tie"):
+            cell_label = str(p["cell_winner"])
+        elif main_iter >= thr:
+            cell_label = "iterative"
+        elif main_one >= thr:
+            cell_label = "oneshot"
+        else:
+            cell_label = "tie"
         table.append(
             f"| {p['seed']} | {p['target_sparsity']*100:.0f}% | {_fmt(o.get('PPL'))} | "
-            f"{_fmt(i.get('PPL'))} | {p['main_dim_iterative_wins']}/4 | {w} |"
+            f"{_fmt(i.get('PPL'))} | {main_iter}/4 | {main_one}/4 | {six_wins}/6 | {cell_label} |"
+        )
+        detail_blocks.append(
+            f"### Seed {p['seed']} · Target {p['target_sparsity']*100:.0f}%\n\n"
+            f"| Dim | One-shot | Iterative | Winner（单维） |\n"
+            f"|-----|----------|-----------|----------------|\n"
+            + "\n".join(
+                f"| {d} | {_fmt(o.get(d))} | {_fmt(i.get(d))} | {winners.get(d, 'n/a')} |"
+                for d in DIM_ORDER
+            )
+            + f"\n\n- 主四维（PPL/Math/Knowledge/Reasoning；Gate 只用这四维）："
+            f" iterative **{main_iter}/4**，oneshot **{main_one}/4**"
+            f"（单维 tie 两边都不计）→ **Cell (主四维) = {cell_label}**"
+            f"（≥{thr}/4 才判胜；否则为 tie）\n"
+            f"- 全六维 iterative 胜（含 Instruction/Code；单维 tie 不计）：**{six_wins}/6**"
+            f"（仅对照，不进 Gate）\n"
         )
 
     dim_lines = [
-        "| Seed | Target | " + " | ".join(DIM_ORDER) + " |",
-        "|------|--------|" + "|".join(["------"] * len(DIM_ORDER)) + "|",
+        "| Seed | Target | " + " | ".join(DIM_ORDER) + " | Six wins |",
+        "|------|--------|" + "|".join(["------"] * len(DIM_ORDER)) + "|----------|",
     ]
     for p in pairs:
         winners = p.get("winner_per_dim") or {}
+        six_wins = sum(1 for d in DIM_ORDER if winners.get(d) == "iterative")
         dim_lines.append(
             f"| {p['seed']} | {p['target_sparsity']*100:.0f}% | "
             + " | ".join(winners.get(d, "n/a") for d in DIM_ORDER)
-            + " |"
+            + f" | {six_wins}/6 |"
         )
 
     dense_vec = dense_cap.get("vector") or {}
@@ -374,15 +425,33 @@ def _build_report(
 
 ## Cell 对照（PPL + Gate）
 
+**Cell (主四维)** 只看 PPL / Math / Knowledge / Reasoning（**不含** Instruction / Code）：
+
+| 标签 | 含义 |
+|------|------|
+| `iterative` | 主四维上 iterative 至少赢 3 维（Gate 计为 cell 胜） |
+| `oneshot` | 主四维上 oneshot 至少赢 3 维 |
+| `tie` | 两边都未满 3 维（例如 2–2，或夹杂单维平局） |
+
+**单维** `tie`（见下方六维表）= 该维分数完全相等，与 **Cell `tie`** 不是同一概念。
+**Six wins** 为全六维对照，**不改变** Gate A。
+
 {chr(10).join(table)}
 
-## 逐维 winner（iterative / oneshot / tie）
+## 六维分数对照（逐 cell）
+
+PPL 越低越好；其余维越高越好。
+**Winner（单维）**：`iterative`（该维更好）/ `oneshot`（该维更好）/ `tie`（该维分数相等）。
+
+{chr(10).join(detail_blocks)}
+
+## 逐维 winner 总表（单维：iterative / oneshot / tie）
 
 {chr(10).join(dim_lines)}
 
 ## Gate A（E2 半）
 
-- iterative cell wins: **{gate.get("iterative_cell_wins")}/{gate.get("total_cells")}**（阈值 ≥{gate.get("min_wins")}）
+- iterative cell wins: **{gate.get("iterative_cell_wins")}/{gate.get("total_cells")}**（门槛 ≥{gate.get("min_wins")}；按主四维 ≥3/4）
 - {"**通过**：支持 iterative advantage。" if gate.get("passed") else "**未通过**：不支持「必须做 Agent」的 iterative 前提。"}
 - 与 E1（capability-specific frontier）合判 Gate A。
 
@@ -635,15 +704,20 @@ def main() -> None:
         # Group by seed to reload calib with correct split_seed
         for seed in seeds:
             seed_items = [w for w in work_items if w[0] == seed]
-            # Also continue partial for this seed
-            if partial and int(partial.get("seed", -1)) == seed:
+            # Always finish an incomplete partial for this seed before other cells
+            # (otherwise a later cell overwrites checkpoint.partial and loses progress).
+            if (
+                partial
+                and int(partial.get("seed", -1)) == seed
+                and not e2_partial_dims_complete(partial)
+            ):
                 key = (
                     int(partial["seed"]),
                     float(partial["target_sparsity"]),
                     str(partial["method"]),
                 )
-                if key not in seed_items and not e2_partial_dims_complete(partial):
-                    seed_items.insert(0, key)
+                seed_items = [w for w in seed_items if w != key]
+                seed_items.insert(0, key)
 
             if not seed_items:
                 continue

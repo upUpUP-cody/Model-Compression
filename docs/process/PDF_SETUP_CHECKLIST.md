@@ -23,7 +23,7 @@
 
 - 实现：[`src/evaluation/capability.py`](../../src/evaluation/capability.py)
 - `seed=42`；环境见 [`scripts/env_llm.sh`](../../scripts/env_llm.sh)（含 `HF_ALLOW_CODE_EVAL=1`）
-- **E1/E2 eval batch_size=8**（formal batch=8（1024）；探针 `bbh1024_batch8_probe.json` peak≈8.0GB；OOM fallback 8→4→2；剪枝校准仍为 1）；**E0 Instruct 保持 batch=1**
+- **E1/E2 eval batch_size=16**（formal batch=16（1024）；探针 `bbh1024_batch16_probe.json` peak≈10.3GB；OOM fallback 16→8→4→2→1；剪枝校准仍为 1）；**E0 Instruct 保持 batch=1**
 - **禁止混协议**：2048 时代 Reasoning 分数仅作 `pre_bbh1024_*` 归档；Gate A / 正式表只用 1024
 - **禁止混模型**：E0 Instruct 分数不可与 E1/E2 base 对比；E1 Delta 只用 base dense
 
@@ -62,7 +62,7 @@
 ### E1 协议要点（验收必读）
 
 1. **Dense 参照**：E1 的 Delta 以 **base 3B 未剪枝** 六维向量为基准；**不得**用 E0 Instruct 的 P(M0) 做 E1 Delta。
-2. **评测**：与 E0 **相同** scan limit / seed / 任务定义（上表）；Reasoning **max_gen_toks=1024**；eval **batch=8**（formal；OOM→4→2）。
+2. **评测**：与 E0 **相同** scan limit / seed / 任务定义（上表）；Reasoning **max_gen_toks=1024**；eval **batch=16**（formal；OOM→8→4→2→1）。
 3. **Runner**：[`experiments/stage_a/run_e1_oneshot_curve.py`](../../experiments/stage_a/run_e1_oneshot_curve.py)（Wanda 剪枝 + `eval_capability_vector`；支持 `--smoke` / `--dry-run`）。
 4. **Wanda 校准**：SST-2 train LM（`pruning.calibration`）；与六维 eval **分离**。
 5. **开跑前检查**：base 权重存在；旧 E1 SST-2 / Instruct / magnitude proxy 产物视为作废。
@@ -99,10 +99,10 @@ bash scripts/resume_e1_single_70.sh
 | Seeds | `[42, 43, 44]`；eval harness seed **恒 42** |
 | Evaluation | 六维 scan（与 E1 `evaluation.capability` 对齐）；**禁止 SST-2 proxy** |
 | Recovery | None |
-| GPU | **双卡多进程**：GPU0=`42,43`，GPU1=`44`（非模型并行） |
+| GPU | **双卡多进程均衡**：GPU0=`42,44`，GPU1=`43`（非模型并行；先 partial 收尾再重写 digest） |
 | 断点续传 | `e2_checkpoint.json`：cell `(seed,target,method)` + 维级 partial；默认 `--resume` |
 | Config / Runner | [`e2_iterative_vs_oneshot.yaml`](../../configs/stage_a/e2_iterative_vs_oneshot.yaml) / [`run_e2_iterative_vs_oneshot.py`](../../experiments/stage_a/run_e2_iterative_vs_oneshot.py) |
-| Launch / Merge | [`launch_e2_dual.sh`](../../scripts/launch_e2_dual.sh) / [`e2_dual_merge_when_done.sh`](../../scripts/e2_dual_merge_when_done.sh) |
+| Launch / Merge | [`launch_e2_dual_balanced.sh`](../../scripts/launch_e2_dual_balanced.sh) / [`e2_dual_merge_when_done.sh`](../../scripts/e2_dual_merge_when_done.sh) |
 | Gate A | 主四维 ≥3/4 且 ≥7/9 cells iterative 胜 |
 
 ### E2 开跑命令
@@ -113,10 +113,11 @@ export PYTHONPATH=/root/Model-Compression HF_ALLOW_CODE_EVAL=1
 # smoke（单卡）
 python experiments/stage_a/run_e2_iterative_vs_oneshot.py \
   --config configs/stage_a/e2_iterative_vs_oneshot.yaml --smoke
-# formal 双卡（默认 --resume）
-bash scripts/launch_e2_dual.sh
+# formal 双卡均衡（默认 --resume；禁止无故 E2_FRESH）
+bash scripts/launch_e2_dual_balanced.sh
 bash scripts/e2_dual_merge_when_done.sh
-# 强制清空续跑：E2_FRESH=1 bash scripts/launch_e2_dual.sh
+# 旧拆分 42+43/44：bash scripts/launch_e2_dual.sh
+# 强制清空续跑：E2_FRESH=1 bash scripts/launch_e2_dual_balanced.sh
 ```
 
 产物：`/mnt/data2/results/E2_iterative_vs_oneshot/` + `_shard_gpu0/` + `_shard_gpu1/`。
@@ -129,5 +130,5 @@ bash scripts/e2_dual_merge_when_done.sh
 |---|------|------|
 | E0 | **done** | `/mnt/data2/results/E0_dense_baseline/` |
 | E1 | **done** | `/mnt/data2/results/E1_oneshot_sparsity_curve/` |
-| E2 | **paused（待 Reasoning 1024 patch→resume）** | `/mnt/data2/results/E2_iterative_vs_oneshot/` |
+| E2 | **done (Gate A FAIL — 暂缓 Agent)** | `/mnt/data2/results/E2_iterative_vs_oneshot/` |
 | E3+ | pending | — |

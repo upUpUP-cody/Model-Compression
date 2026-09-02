@@ -14,7 +14,7 @@ def test_e1_e2_capability_config_aligned():
     r2 = resolve_capability_config(e2)
     assert r1["mode"] == r2["mode"] == "scan"
     assert r1["seed"] == r2["seed"] == 42
-    assert r1["batch_size"] == r2["batch_size"] == 8
+    assert r1["batch_size"] == r2["batch_size"] == 16
     assert r1["bootstrap_iters"] == r2["bootstrap_iters"] == 0
     assert r1["scan_limits"] == r2["scan_limits"]
     assert r1["scan_limits"] == {
@@ -47,7 +47,7 @@ def test_e2_yaml_has_no_sst2_proxy_eval_fields():
     assert "capability" in evaluation
     assert e2.get("incremental_step_sparsity") == 0.05
     assert "iterative_steps" not in e2
-    assert e2.get("hardware", {}).get("batch_size") == 8
+    assert e2.get("hardware", {}).get("batch_size") == 16
 
 
 def test_pruning_eval_protocol_digest_stable():
