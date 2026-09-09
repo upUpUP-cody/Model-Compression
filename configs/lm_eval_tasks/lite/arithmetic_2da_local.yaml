@@ -1,0 +1,18 @@
+# Local arithmetic_2da (EleutherAI raw JSONL) — avoids datasets loading-script ban.
+task: arithmetic_2da_local
+dataset_path: json
+dataset_kwargs:
+  data_files:
+    validation: /mnt/data/datasets/lite_banks/arithmetic_2da.jsonl
+output_type: loglikelihood
+validation_split: validation
+test_split: null
+doc_to_text: "{{context}}"
+doc_to_target: "{{completion}}"
+target_delimiter: ""
+metric_list:
+  - metric: acc
+    aggregation: mean
+    higher_is_better: true
+metadata:
+  version: 1.0

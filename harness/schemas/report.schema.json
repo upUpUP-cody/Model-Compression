@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://model-compression.local/harness/schemas/report.schema.json",
+  "title": "CompressionHarnessReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "created_at",
+    "goal_ref",
+    "model_ref",
+    "status",
+    "stop_reason",
+    "steps",
+    "final",
+    "scores_comparison"
+  ],
+  "properties": {
+    "report_id": { "type": "string" },
+    "created_at": { "type": "string" },
+    "goal_ref": { "type": "string" },
+    "model_ref": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["accepted", "failed", "partial"]
+    },
+    "stop_reason": { "type": ["string", "null"] },
+    "baseline_sec": { "type": ["number", "null"] },
+    "notes": { "type": "string" },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step_index", "run_id", "recipe_id"],
+        "properties": {
+          "step_index": { "type": "integer", "minimum": 1 },
+          "run_id": { "type": "string" },
+          "recipe_id": { "type": "string" },
+          "backend": { "type": ["string", "null"] },
+          "method": { "type": ["string", "null"] },
+          "weight_bits": { "type": ["integer", "null"] },
+          "duration_sec": {
+            "type": "object",
+            "properties": {
+              "compress": { "type": ["number", "null"] },
+              "eval": { "type": ["number", "null"] },
+              "total": { "type": ["number", "null"] }
+            },
+            "additionalProperties": true
+          },
+          "size_bytes": { "type": ["integer", "null"] },
+          "size_ratio_vs_dense": { "type": ["number", "null"] },
+          "primary_score": { "type": ["number", "null"] },
+          "baseline_score": { "type": ["number", "null"] },
+          "relative_drop": { "type": ["number", "null"] },
+          "near_lossless_ok": { "type": ["boolean", "null"] },
+          "status": { "type": ["string", "null"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "final": {
+      "type": "object",
+      "properties": {
+        "accepted_run_id": { "type": ["string", "null"] },
+        "dense_size_bytes": { "type": ["integer", "null"] },
+        "compressed_size_bytes": { "type": ["integer", "null"] },
+        "compression_ratio": {
+          "type": ["number", "null"],
+          "description": "dense_size / compressed_size"
+        },
+        "size_reduction_pct": { "type": ["number", "null"] },
+        "primary_metric": { "type": ["string", "null"] },
+        "baseline_score": { "type": ["number", "null"] },
+        "final_score": { "type": ["number", "null"] },
+        "relative_drop": { "type": ["number", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "scores_comparison": {
+      "type": "object",
+      "required": ["dense", "compressed", "deltas"],
+      "properties": {
+        "dense": { "type": "object", "additionalProperties": true },
+        "compressed": { "type": "object", "additionalProperties": true },
+        "deltas": { "type": "object", "additionalProperties": true },
+        "primary_task": { "type": ["string", "null"] },
+        "primary_dim": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

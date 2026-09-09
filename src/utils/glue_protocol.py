@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -203,22 +203,81 @@ def glue_accuracy(
     *,
     task: str = "sst2",
 ) -> Dict[str, float]:
+    """Compute GLUE verbalizer accuracy plus collapse-aware extras (percent scale).
+
+    Extra keys (same percent / rate conventions):
+    - majority_baseline: accuracy of always predicting the majority reference class
+    - balanced_accuracy: mean per-class recall
+    - macro_f1: unweighted mean of per-class F1
+    - pred_rate_0 / pred_rate_1: fraction of valid predictions mapped to label 0 / 1
+    """
     task = _normalize_task(task)
     if set(predictions) != set(references):
         missing = set(references) - set(predictions)
         extra = set(predictions) - set(references)
         raise ValueError(f"prediction/reference id mismatch; missing={len(missing)} extra={len(extra)}")
+
+    n = len(references)
+    if n == 0:
+        return {
+            "accuracy": 0.0,
+            "n_examples": 0.0,
+            "majority_baseline": 0.0,
+            "balanced_accuracy": 0.0,
+            "macro_f1": 0.0,
+            "pred_rate_0": 0.0,
+            "pred_rate_1": 0.0,
+        }
+
     correct = 0
-    n = 0
+    true_counts = {0: 0, 1: 0}
+    pred_counts = {0: 0, 1: 0}
+    tp = {0: 0, 1: 0}
+
     for example_id, prediction in predictions.items():
-        pred_label = prediction_to_label(prediction, task=task)
         truth = int(references[example_id])
-        if pred_label is not None and pred_label == truth:
-            correct += 1
-        n += 1
+        if truth not in (0, 1):
+            # Keep binary extras well-defined for SST-2 / RTE / QNLI.
+            truth = 0 if truth < 1 else 1
+        true_counts[truth] = true_counts.get(truth, 0) + 1
+        pred_label = prediction_to_label(prediction, task=task)
+        if pred_label is not None and pred_label in (0, 1):
+            pred_counts[pred_label] = pred_counts.get(pred_label, 0) + 1
+            if pred_label == truth:
+                correct += 1
+                tp[truth] = tp.get(truth, 0) + 1
+
+    majority_class = max((0, 1), key=lambda c: (true_counts.get(c, 0), -c))
+    majority_baseline = 100.0 * float(true_counts.get(majority_class, 0) / n)
+
+    recalls: List[float] = []
+    f1s: List[float] = []
+    for c in (0, 1):
+        t_c = float(true_counts.get(c, 0))
+        p_c = float(pred_counts.get(c, 0))
+        tp_c = float(tp.get(c, 0))
+        if t_c > 0:
+            recall = tp_c / t_c
+            recalls.append(recall)
+        else:
+            recall = 0.0
+        precision = (tp_c / p_c) if p_c > 0 else 0.0
+        if precision + recall > 0:
+            f1s.append(2.0 * precision * recall / (precision + recall))
+        elif t_c > 0:
+            f1s.append(0.0)
+
+    balanced = 100.0 * float(sum(recalls) / len(recalls)) if recalls else 0.0
+    macro_f1 = 100.0 * float(sum(f1s) / len(f1s)) if f1s else 0.0
+
     return {
-        "accuracy": 100.0 * float(correct / n) if n else 0.0,
+        "accuracy": 100.0 * float(correct / n),
         "n_examples": float(n),
+        "majority_baseline": majority_baseline,
+        "balanced_accuracy": balanced,
+        "macro_f1": macro_f1,
+        "pred_rate_0": float(pred_counts.get(0, 0) / n),
+        "pred_rate_1": float(pred_counts.get(1, 0) / n),
     }
 
 

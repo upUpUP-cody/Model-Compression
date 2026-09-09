@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://model-compression.local/harness/schemas/run_artifact.schema.json",
+  "title": "RunArtifact",
+  "type": "object",
+  "required": ["run_id", "status", "goal_ref", "recipe_ref"],
+  "properties": {
+    "run_id": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "running",
+        "evaluated",
+        "accepted",
+        "rejected",
+        "failed",
+        "dry_run"
+      ]
+    },
+    "goal_ref": { "type": "string" },
+    "recipe_ref": { "type": "string" },
+    "baseline_score": { "type": ["number", "null"] },
+    "score": { "type": ["number", "null"] },
+    "relative_drop": { "type": ["number", "null"] },
+    "near_lossless_ok": { "type": ["boolean", "null"] },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "size_bytes": { "type": ["integer", "null"] },
+    "hypothesis": { "type": ["string", "null"] },
+    "next_recipe_suggestion": { "type": ["string", "null"] },
+    "created_at": { "type": "string" },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": true
+}

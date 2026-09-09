@@ -233,3 +233,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Compression Harness run artifacts
+harness/experiments/run_*
+harness/experiments/manual_*
+harness/experiments/_baseline*
+harness/experiments/reports/
+harness/experiments/iter_*
+
+# Harness experiments dir is a symlink to data volume
+harness/experiments

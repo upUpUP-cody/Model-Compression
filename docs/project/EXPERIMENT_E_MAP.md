@@ -40,6 +40,15 @@
 - **断点续传**：`e2_checkpoint.json`（cell + 维级 partial）；默认 `--resume`
 - **Runner / Config**：`experiments/stage_a/run_e2_iterative_vs_oneshot.py` / `configs/stage_a/e2_iterative_vs_oneshot.yaml`
 
+## Soft-eval 旁路（导师菜单）
+
+- **状态**：`_easy`+Sentiment / `_soft` / `_lite` 均 **done**
+- **不进 Gate A**；正式 E1/E2 不变；**禁止**把旁路分写回正式六维向量
+- **菜单**：[MENTOR_EVAL_MENU.md](MENTOR_EVAL_MENU.md)
+- **总报告**：[E1_eval_ladder_all_banks.md](../results/E1_eval_ladder_all_banks.md)
+- **Runner**：`experiments/stage_a/run_soft_eval_side.py`
+- **产物**：`/mnt/data2/results/E1_soft_eval_side/` · `…/E1_soft_eval_soft/` · `…/E1_soft_eval_lite/`
+
 ## 当前步
 
-**E2 已结束**：Gate A passed=False wins=1/9。下一步按 PDF 进入 E3（仅当 Gate A 通过）。**E0 Instruct 永不进入 Gate A**。
+**E2 已结束**：Gate A passed=False wins=1/9。旁路 soft-eval 供老师选尺子；PDF 下一步 E3 仍受 Gate A 约束。**E0 Instruct 永不进入 Gate A**。

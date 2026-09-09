@@ -1,0 +1,30 @@
+# Local HumanEval single-line infilling (raw JSONL) — avoids datasets loading-script ban.
+task: humaneval_single_line_infilling_local
+dataset_path: json
+dataset_kwargs:
+  data_files:
+    test: /mnt/data/datasets/lite_banks/HumanEval-SingleLineInfilling.jsonl
+unsafe_code: true
+output_type: generate_until
+test_split: test
+doc_to_text: "{{suffix}}\n\n{{prompt}}"
+doc_to_target: "{{test}}\ncheck({{entry_point}})"
+metric_list:
+  - metric: !function utils.pass_at_k
+    aggregation: mean
+    higher_is_better: true
+    k: [1]
+generation_kwargs:
+  until:
+    - "\n"
+  max_gen_toks: 64
+  do_sample: false
+repeats: 1
+num_fewshot: 0
+filter_list:
+  - name: "create_test"
+    filter:
+      - function: "custom"
+        filter_fn: !function utils.build_predictions
+metadata:
+  version: 1.0

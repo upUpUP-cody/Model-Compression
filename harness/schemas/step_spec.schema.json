@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://model-compression.local/harness/schemas/step_spec.schema.json",
+  "title": "CompressionStepSpec",
+  "type": "object",
+  "required": ["step_id", "plugin", "kind"],
+  "properties": {
+    "step_id": { "type": "string", "minLength": 1 },
+    "plugin": { "type": "string", "minLength": 1 },
+    "kind": { "type": "string", "enum": ["quantize", "prune", "evaluate"] },
+    "layer_range": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0 },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[lo, hi] inclusive layer indices"
+    },
+    "weight_bits": { "type": "integer", "minimum": 2, "maximum": 16 },
+    "sparsity": { "type": "number", "minimum": 0, "maximum": 0.95 },
+    "sparsity_delta": { "type": "number", "minimum": 0, "maximum": 0.2 },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": true
+}

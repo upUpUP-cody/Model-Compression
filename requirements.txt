@@ -51,3 +51,5 @@ human-eval>=1.0.3  # HumanEval pass@1 for Code dim
 # Optional: for advanced features
 peft>=0.4.0  # Parameter-Efficient Fine-Tuning (LoRA)
 # optimum>=1.9.0  # Hardware-optimized transformers
+jsonschema>=4.0
+torchao>=0.18.0  # Harness Phase B INT8 weight-only adapter

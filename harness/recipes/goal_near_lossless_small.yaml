@@ -1,0 +1,32 @@
+# Example near-lossless Goal for a small local model.
+# ratio_required: false — any qualifying compression is success.
+
+goal:
+  model:
+    path: /mnt/data/models/Qwen2.5-3B
+    name: Qwen2.5-3B
+    dtype: bfloat16
+
+  hardware:
+    gpu: RTX4090
+    num_gpu: 1
+
+  quality:
+    mode: near_lossless
+    max_relative_drop: 0.02
+    tasks:
+      - hellaswag
+
+  compression:
+    ratio_required: false
+    prefer: milder_first
+
+  search:
+    auto: true
+    max_trials: 10
+
+  evaluation:
+    tasks:
+      - hellaswag
+    primary_metric: acc_norm
+    limit: 64

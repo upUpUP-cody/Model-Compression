@@ -1,0 +1,14 @@
+recipe_id: global_int8_llmcompressor
+backend: llm_compressor
+method: int8
+layers:
+  default:
+    weight_bits: 8
+    activation_bits: 16
+    group_size: 128
+exclude:
+  - lm_head
+calibration:
+  dataset: pile
+  samples: 256
+notes: Alternate INT8 backend; still milder_first path.

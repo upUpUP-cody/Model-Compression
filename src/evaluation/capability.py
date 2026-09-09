@@ -208,6 +208,8 @@ def resolve_capability_config(config: Optional[Mapping[str, Any]]) -> Dict[str, 
                 _as_mapping(root.get("model")).get("torch_dtype", "float16"),
             )
         ),
+        "max_length": cap.get("max_length"),
+        "task_include_path": cap.get("task_include_path"),
         "limit_override": cap.get("limit_override"),  # smoke: int applied to all dims
         "log_samples": bool(cap.get("log_samples", False)),
         "bootstrap_iters": int(cap.get("bootstrap_iters", 0)),
@@ -271,24 +273,28 @@ def _build_lm(
     batch_size: Any,
     model: Any = None,
     tokenizer: Any = None,
+    max_length: Optional[int] = None,
 ):
     from lm_eval.models.huggingface import HFLM
+
+    kwargs: Dict[str, Any] = dict(
+        device=device,
+        dtype=dtype,
+        batch_size=batch_size,
+        trust_remote_code=True,
+    )
+    if max_length is not None:
+        kwargs["max_length"] = int(max_length)
 
     if model is not None:
         return HFLM(
             pretrained=model,
             tokenizer=tokenizer,
-            device=device,
-            dtype=dtype,
-            batch_size=batch_size,
-            trust_remote_code=True,
+            **kwargs,
         )
     return HFLM(
         pretrained=model_path,
-        device=device,
-        dtype=dtype,
-        batch_size=batch_size,
-        trust_remote_code=True,
+        **kwargs,
     )
 
 
@@ -305,6 +311,8 @@ def eval_capability_vector(
     Returns dict with vector, per-dim details, mode, and raw harness slices.
     """
     from lm_eval import simple_evaluate
+    from lm_eval.tasks import TaskManager
+    from pathlib import Path as _Path
 
     resolved = resolve_capability_config(config)
     if mode is not None:
@@ -318,6 +326,17 @@ def eval_capability_vector(
     details: Dict[str, Any] = {}
     raw_by_dim: Dict[str, Any] = {}
 
+    include_path = resolved.get("task_include_path")
+    task_manager = None
+    if include_path:
+        repo_root = _Path(__file__).resolve().parents[2]
+        paths = include_path if isinstance(include_path, (list, tuple)) else [include_path]
+        abs_paths = []
+        for p in paths:
+            pp = _Path(str(p))
+            abs_paths.append(str(pp if pp.is_absolute() else (repo_root / pp)))
+        task_manager = TaskManager(include_path=abs_paths)
+
     lm = _build_lm(
         model_path,
         device=resolved["device"],
@@ -325,6 +344,7 @@ def eval_capability_vector(
         batch_size=resolved["batch_size"],
         model=model,
         tokenizer=tokenizer,
+        max_length=resolved.get("max_length"),
     )
 
     skip_set = set(resolved.get("skip_dimensions") or ())
@@ -378,6 +398,8 @@ def eval_capability_vector(
                 torch_random_seed=seed,
                 fewshot_random_seed=seed,
             )
+            if task_manager is not None:
+                eval_kwargs["task_manager"] = task_manager
             if gen_kwargs:
                 eval_kwargs["gen_kwargs"] = dict(gen_kwargs)
             out = simple_evaluate(**eval_kwargs)

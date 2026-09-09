@@ -1,0 +1,124 @@
+# Soft-eval _soft ladder (NOT Gate A / NOT formal PDF six-dim replacement)
+# Hybrid difficulty: same-bank softer PPL/Instruction; new easier banks for Math/Know/Reason/Code.
+# Separate digest/checkpoint from e1_soft_eval_side.yaml so Sentiment+_easy scores stay intact.
+experiment_id: E1_soft_eval_soft
+model:
+  path: /mnt/data/models/Qwen2.5-3B
+  pdf_model: Qwen2.5-3B
+  spec: formal_3B_base
+  torch_dtype: float16
+
+sparsity_grid: [0.0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70]
+recovery: none
+seed: 42
+
+e1_oneshot_checkpoint: /mnt/data2/results/E1_oneshot_sparsity_curve/e1_checkpoint.json
+
+pruning:
+  method: wanda
+  wanda_batches: 4
+  calibration:
+    max_seq_len: 256
+    train_max_samples: 128
+    batch_size: 1
+
+# Plan SVAMP unavailable in lm_eval → Math_soft uses asdiv (documented fallback).
+soft_dimensions:
+  PPL_soft:
+    kind: capability
+    base_dim: PPL
+    scan_limit: 4
+    max_length: 128
+  Math_soft:
+    kind: capability
+    base_dim: Math
+    task: asdiv
+    scan_limit: 32
+    num_fewshot: 0
+    apply_chat_template: false
+    metric_candidates:
+      - acc,none
+      - acc
+      - exact_match,flexible-extract
+      - exact_match
+  Knowledge_soft:
+    kind: capability
+    base_dim: Knowledge
+    task: arc_easy
+    scan_limit: 64
+    num_fewshot: 0
+    apply_chat_template: false
+    metric_candidates:
+      - acc,none
+      - acc
+      - acc_norm,none
+      - acc_norm
+  Reasoning_soft:
+    kind: capability
+    base_dim: Reasoning
+    task: boolq
+    scan_limit: 64
+    num_fewshot: 0
+    apply_chat_template: false
+    metric_candidates:
+      - acc,none
+      - acc
+  Instruction_soft:
+    kind: capability
+    base_dim: Instruction
+    scan_limit: 16
+    metric_candidates:
+      - prompt_level_loose_acc,none
+      - prompt_level_loose_acc
+      - prompt_level_strict_acc,none
+      - prompt_level_strict_acc
+  Code_soft:
+    kind: capability
+    base_dim: Code
+    task: mbpp
+    scan_limit: 16
+    num_fewshot: 3
+    apply_chat_template: false
+    confirm_run_unsafe_code: true
+    gen_kwargs:
+      until: ["[DONE]"]
+      do_sample: false
+      max_gen_toks: 256
+    metric_candidates:
+      - pass@1,none
+      - pass@1
+      - pass_at_1,none
+      - pass_at_1
+
+evaluation:
+  capability:
+    mode: scan
+    seed: 42
+    batch_size: 16
+    bootstrap_iters: 0
+    scan_limits:
+      PPL: 4
+      Math: 64
+      Knowledge: 128
+      Reasoning: 64
+      Instruction: 64
+      Code: 32
+    dimensions:
+      Reasoning:
+        gen_kwargs:
+          max_gen_toks: 1024
+          do_sample: false
+
+hardware:
+  device: cuda:0
+  batch_size: 16
+
+logging:
+  output_root: /mnt/data2/results/E1_soft_eval_soft
+
+dataset:
+  name: nyu-mll/glue
+  task: sst2
+  cache_dir: /mnt/data/datasets/glue
+  validation_fraction: 0.1
+  split_seed: 42

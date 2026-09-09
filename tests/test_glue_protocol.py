@@ -85,6 +85,36 @@ def test_rte_verbalizer_prefers_not_entailment():
         task="rte",
     )
     assert metrics["accuracy"] == 100.0
+    assert metrics["balanced_accuracy"] == 100.0
+    assert metrics["majority_baseline"] == 50.0
+
+
+def test_glue_majority_collapse_metrics():
+    """Always predicting the majority class: acc ~= majority, balanced ~= 50."""
+    refs = {str(i): (0 if i < 7 else 1) for i in range(10)}  # 70% class 0
+    preds = {k: "entailment" for k in refs}  # always class 0
+    metrics = glue_accuracy(preds, refs, task="rte")
+    assert metrics["n_examples"] == 10.0
+    assert metrics["accuracy"] == pytest.approx(70.0)
+    assert metrics["majority_baseline"] == pytest.approx(70.0)
+    assert metrics["balanced_accuracy"] == pytest.approx(50.0)
+    assert metrics["pred_rate_0"] == pytest.approx(1.0)
+    assert metrics["pred_rate_1"] == pytest.approx(0.0)
+    assert metrics["macro_f1"] == pytest.approx(100.0 * (2 * 0.7 * 1.0 / (0.7 + 1.0) + 0.0) / 2.0)
+
+
+def test_glue_balanced_perfect_binary():
+    metrics = glue_accuracy(
+        {"a": "positive", "b": "negative", "c": "positive", "d": "negative"},
+        {"a": 1, "b": 0, "c": 1, "d": 0},
+        task="sst2",
+    )
+    assert metrics["accuracy"] == 100.0
+    assert metrics["balanced_accuracy"] == 100.0
+    assert metrics["majority_baseline"] == 50.0
+    assert metrics["macro_f1"] == 100.0
+    assert metrics["pred_rate_0"] == 0.5
+    assert metrics["pred_rate_1"] == 0.5
 
 
 def test_qnli_verbalizer_yes_no():

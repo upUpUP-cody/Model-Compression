@@ -124,6 +124,23 @@ bash scripts/e2_dual_merge_when_done.sh
 
 ---
 
+## Soft-eval 旁路（导师菜单 · 不进 Gate A）
+
+- **目的**：Sentiment + `_easy` / `_soft` / `_lite` 难度阶梯；稀疏 0–70%；给老师勾选尺子。
+- **禁止**：用旁路分数改写 E1/E2 正式向量或 Gate A。
+- **Config**：`e1_soft_eval_side.yaml` · `e1_dim_soft_alts.yaml` · `e1_dim_lite_alts.yaml`
+- **Runner**：`experiments/stage_a/run_soft_eval_side.py`
+- **总表**：[`docs/results/E1_eval_ladder_all_banks.md`](../results/E1_eval_ladder_all_banks.md)
+- **产物**：`/mnt/data2/results/E1_soft_eval_side/` · `…/E1_soft_eval_soft/` · `…/E1_soft_eval_lite/`
+
+```bash
+source venv/bin/activate && source scripts/env_llm.sh
+export PYTHONPATH=/root/Model-Compression
+python experiments/stage_a/run_soft_eval_side.py --config configs/stage_a/e1_dim_lite_alts.yaml --dry-run
+```
+
+---
+
 ## 进度
 
 | E | 状态 | 产物 |
@@ -131,4 +148,8 @@ bash scripts/e2_dual_merge_when_done.sh
 | E0 | **done** | `/mnt/data2/results/E0_dense_baseline/` |
 | E1 | **done** | `/mnt/data2/results/E1_oneshot_sparsity_curve/` |
 | E2 | **done (Gate A FAIL — 暂缓 Agent)** | `/mnt/data2/results/E2_iterative_vs_oneshot/` |
+| Soft-eval `_easy`+Sentiment | **done** | `/mnt/data2/results/E1_soft_eval_side/` |
+| Soft-eval `_soft` | **done** | `/mnt/data2/results/E1_soft_eval_soft/` |
+| Soft-eval `_lite` | **done** | `/mnt/data2/results/E1_soft_eval_lite/` |
+| 评测阶梯总表 | **done** | `docs/results/E1_eval_ladder_all_banks.md` |
 | E3+ | pending | — |

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://model-compression.local/harness/schemas/recipe.schema.json",
+  "title": "CompressionRecipe",
+  "type": "object",
+  "required": ["recipe_id", "backend", "method", "layers"],
+  "properties": {
+    "recipe_id": { "type": "string", "minLength": 1 },
+    "backend": {
+      "type": "string",
+      "enum": ["torchao", "llm_compressor", "autoround", "stub"]
+    },
+    "method": { "type": "string", "minLength": 1 },
+    "layers": {
+      "type": "object",
+      "required": ["default"],
+      "properties": {
+        "default": {
+          "type": "object",
+          "properties": {
+            "weight_bits": { "type": "integer", "minimum": 2, "maximum": 16 },
+            "activation_bits": { "type": "integer", "minimum": 4, "maximum": 16 },
+            "group_size": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "exclude": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "calibration": {
+      "type": "object",
+      "properties": {
+        "dataset": { "type": "string" },
+        "samples": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "notes": { "type": "string" }
+  },
+  "additionalProperties": true
+}

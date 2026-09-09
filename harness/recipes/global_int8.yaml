@@ -1,0 +1,14 @@
+recipe_id: global_int8_torchao
+backend: torchao
+method: int8_weight_only
+layers:
+  default:
+    weight_bits: 8
+    activation_bits: 16
+    group_size: 0
+exclude:
+  - lm_head
+calibration:
+  dataset: pile
+  samples: 128
+notes: Mild default for near-lossless auto search.

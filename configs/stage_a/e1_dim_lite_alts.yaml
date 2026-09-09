@@ -1,0 +1,96 @@
+# Soft-eval _lite ladder for Math / Instruction / Code (NOT Gate A)
+# Easier banks after _soft still too hard: arithmetic_2da, GLUE RTE, HumanEval single-line fill.
+# Local JSONL tasks under configs/lm_eval_tasks/lite (HF dataset scripts unsupported on datasets 5.x).
+# Separate digest/checkpoint from easy/soft YAMLs.
+experiment_id: E1_soft_eval_lite
+model:
+  path: /mnt/data/models/Qwen2.5-3B
+  pdf_model: Qwen2.5-3B
+  spec: formal_3B_base
+  torch_dtype: float16
+
+sparsity_grid: [0.0, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70]
+recovery: none
+seed: 42
+
+e1_oneshot_checkpoint: /mnt/data2/results/E1_oneshot_sparsity_curve/e1_checkpoint.json
+
+pruning:
+  method: wanda
+  wanda_batches: 4
+  calibration:
+    max_seq_len: 256
+    train_max_samples: 128
+    batch_size: 1
+
+soft_dimensions:
+  Math_lite:
+    kind: capability
+    base_dim: Math
+    task: arithmetic_2da_local
+    task_include_path: configs/lm_eval_tasks/lite
+    scan_limit: 64
+    num_fewshot: 0
+    apply_chat_template: false
+    metric_candidates:
+      - acc,none
+      - acc
+  Instruction_lite:
+    kind: glue_rte
+    metric: balanced_accuracy
+    glue_task: rte
+    max_samples: 256
+    max_seq_len: 256
+    max_new_tokens: 8
+  Code_lite:
+    kind: capability
+    base_dim: Code
+    task: humaneval_single_line_infilling_local
+    task_include_path: configs/lm_eval_tasks/lite
+    scan_limit: 16
+    num_fewshot: 0
+    apply_chat_template: false
+    confirm_run_unsafe_code: true
+    gen_kwargs:
+      until: ["\n"]
+      do_sample: false
+      max_gen_toks: 64
+    metric_candidates:
+      - pass@1,create_test
+      - pass@1,none
+      - pass@1
+      - pass_at_1,none
+      - pass_at_1
+
+evaluation:
+  capability:
+    mode: scan
+    seed: 42
+    batch_size: 16
+    bootstrap_iters: 0
+    task_include_path: configs/lm_eval_tasks/lite
+    scan_limits:
+      PPL: 4
+      Math: 64
+      Knowledge: 128
+      Reasoning: 64
+      Instruction: 64
+      Code: 32
+  sentiment:
+    max_samples: 256
+    batch_size: 8
+
+hardware:
+  device: cuda:0
+  batch_size: 16
+
+logging:
+  output_root: /mnt/data2/results/E1_soft_eval_lite
+
+# SST-2 retained for Wanda calibration LM loaders; Instruction_lite forces glue_task=rte at eval time.
+dataset:
+  name: nyu-mll/glue
+  task: sst2
+  cache_dir: /mnt/data/datasets/glue
+  validation_fraction: 0.1
+  split_seed: 42

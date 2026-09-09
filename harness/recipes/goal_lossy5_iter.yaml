@@ -1,0 +1,39 @@
+# Iterative lossy-bounded goal: keep drop <= 5%; stop and revert if exceeded.
+
+goal:
+  model:
+    path: /mnt/data/models/Qwen2.5-3B
+    name: Qwen2.5-3B
+    dtype: bfloat16
+    num_layers: 36
+
+  hardware:
+    gpu: RTX4090
+    num_gpu: 1
+
+  quality:
+    mode: lossy_bounded
+    max_relative_drop: 0.05
+    tasks:
+      - hellaswag
+
+  compression:
+    ratio_required: false
+    prefer: milder_first
+
+  search:
+    auto: true
+    max_trials: 6
+    max_rounds: 6
+    step_policy: short_layer
+    stop_on_violation: revert_last_good
+    plugins_order: []
+    max_layers_per_step: 2
+    max_sparsity_delta: 0.05
+    min_weight_bits: 8
+
+  evaluation:
+    tasks:
+      - hellaswag
+    primary_metric: acc_norm
+    limit: 64

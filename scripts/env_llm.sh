@@ -22,6 +22,10 @@ export LLM_RESULTS_ROOT=/mnt/data2/results
 export LLM_CHECKPOINT_ROOT=/mnt/data2/checkpoints
 export TRITON_CACHE_DIR="${TRITON_CACHE_DIR:-/mnt/data2/hf/triton}"
 
+# Compression Harness: multi-GB ckpt/runs + torch temp off root FS.
+export HARNESS_EXPERIMENTS_DIR="${HARNESS_EXPERIMENTS_DIR:-/mnt/data2/results/harness_experiments}"
+export TMPDIR="${TMPDIR:-/mnt/data2/tmp}"
+
 mkdir -p \
   "$HF_HOME" \
   "$HF_DATASETS_CACHE" \
@@ -31,4 +35,6 @@ mkdir -p \
   "$LLM_GLUE_DIR" \
   "$LLM_RESULTS_ROOT" \
   "$LLM_CHECKPOINT_ROOT" \
-  "$TRITON_CACHE_DIR"
+  "$TRITON_CACHE_DIR" \
+  "$HARNESS_EXPERIMENTS_DIR" \
+  "$TMPDIR"
